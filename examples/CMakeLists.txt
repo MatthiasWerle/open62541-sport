@@ -37,6 +37,12 @@ macro(add_example EXAMPLE_NAME EXAMPLE_SOURCE)
   endif()
 endmacro()
 
+#########################
+# Experimental Examples #
+#########################
+
+add_example(server_sport server_sport.c)
+
 #############
 # Tutorials #
 #############
@@ -65,6 +71,7 @@ add_example(tutorial_client_firststeps tutorial_client_firststeps.c)
 
 add_example(tutorial_client_events tutorial_client_events.c)
 
+#add_example(tutorial_server_events tutorial_server_events.c)
 if(UA_ENABLE_SUBSCRIPTIONS_EVENTS)
   add_example(tutorial_server_events tutorial_server_events.c)
 endif()
