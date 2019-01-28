@@ -1,6 +1,6 @@
 #define DISPLAY_STRING
 
-static void
+static UA_StatusCode
 addVariable_fdSPort(UA_Server *server) 
 {
     /* Define the attribute of the fdSPort variable node */
@@ -20,6 +20,8 @@ addVariable_fdSPort(UA_Server *server)
     UA_Server_addVariableNode(server, fdSPortNodeId, parentNodeId,
                               parentReferenceNodeId, fdSPortName,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "addVariable_fdSPort was called");
+	return UA_STATUSCODE_GOOD;
 }
 
 /* set file descriptor for a serial port */
@@ -97,66 +99,80 @@ set_blocking (int fd, int should_block)
                 printf ("error %d setting term attributes", errno);
 }
 
-/*
-static UA_StatusCode
-helloWorldMethodCallback(UA_Server *server,
+/* callable only by server */
+//static int 
+//sport_send_msg(char msg[], int fd)
+//{
+//    int wlen = (int)write(fd, msg, strlen(msg)); /* number of bytes written */
+//    if (wlen != (int)strlen(msg)) {
+//        printf("Error from write: %d, %d\n", wlen, errno);
+//    }
+//    tcdrain(fd);    /* delay for output */
+//}
+//    return wlen;
+
+/* callable by server and client */
+static UA_StatusCode 
+sportSendMsgMethodCallback(UA_Server *server,
                          const UA_NodeId *sessionId, void *sessionHandle,
                          const UA_NodeId *methodId, void *methodContext,
                          const UA_NodeId *objectId, void *objectContext,
-                         size_t inputSize, const UA_Variant *input,
-                         size_t outputSize, UA_Variant *output) {
-    UA_String *inputStr = (UA_String*)input->data;
-    UA_String tmp = UA_STRING_ALLOC("Hello ");
-    if(inputStr->length > 0) {
-        tmp.data = (UA_Byte *)UA_realloc(tmp.data, tmp.length + inputStr->length);
-        memcpy(&tmp.data[tmp.length], inputStr->data, inputStr->length);
-        tmp.length += inputStr->length;
-    }
-    UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]);
-    UA_String_clear(&tmp);
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Hello World was called");
+						 size_t inputSize1, const UA_Variant *inputFd,
+						 size_t inputSize2, const UA_Variant *inputMsg,
+                         size_t outputSize, UA_Variant *output)
+//						 const char msg[], const int fd
+{
+//	UA_Int32 wlen;
+	UA_String *inputStr = (UA_String*)inputMsg->data;
+	UA_Int32 *inputInt = (UA_Int32*)inputFd->data;
+    UA_Int32 wlen = (UA_Int32)write((int)*inputInt, (char)*inputStr, strlen((char)*inputStr)); /* number of bytes written */
+//    if (wlen != (int)strlen(msg)) {
+//        printf("Error from write: %d, %d\n", wlen, errno);
+//    }
+//    tcdrain(fd);    /* delay for output */
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
     return UA_STATUSCODE_GOOD;
 }
 
 static void
-addHellWorldMethod(UA_Server *server) {
-    UA_Argument inputArgument;
-    UA_Argument_init(&inputArgument);
-    inputArgument.description = UA_LOCALIZEDTEXT("en-US", "A String");
-    inputArgument.name = UA_STRING("MyInput");
-    inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    inputArgument.valueRank = UA_VALUERANK_SCALAR;
-
-    UA_Argument outputArgument;
-    UA_Argument_init(&outputArgument);
-    outputArgument.description = UA_LOCALIZEDTEXT("en-US", "A String");
-    outputArgument.name = UA_STRING("MyOutput");
-    outputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    outputArgument.valueRank = UA_VALUERANK_SCALAR;
-
-    UA_MethodAttributes helloAttr = UA_MethodAttributes_default;
-    helloAttr.description = UA_LOCALIZEDTEXT("en-US","Say `Hello World`");
-    helloAttr.displayName = UA_LOCALIZEDTEXT("en-US","Hello World");
-    helloAttr.executable = true;
-    helloAttr.userExecutable = true;
-    UA_Server_addMethodNode(server, UA_NODEID_NUMERIC(1,62541),
+addSportSendMsgMethod(UA_Server *server){
+	UA_Argument inputArguments[2];
+	UA_Argument_init(&inputArguments[0]);
+	inputArguments[0].description = UA_LOCALIZEDTEXT("en-US", "an int, filepointer to serial port");
+	inputArguments[0].name = UA_STRING("FD");
+	inputArguments[0].dataType = UA_TYPES[UA_TYPES_INT32].typeId;
+	inputArguments[0].valueRank = UA_VALUERANK_SCALAR; /* what is this? */
+	
+	UA_Argument_init(&inputArguments[1]);
+	inputArguments[1].description = UA_LOCALIZEDTEXT("en-US", "A string, message to be sent");
+	inputArguments[1].name = UA_STRING("InputMessage");
+	inputArguments[1].dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+	inputArguments[1].valueRank = UA_VALUERANK_SCALAR; /* what is this? */
+	
+	UA_Argument outputArgument;
+	UA_Argument_init(&outputArgument);
+	outputArgument.description = UA_LOCALIZEDTEXT("en-US", "A string, message that was sent");
+	outputArgument.name = UA_STRING("OutputMessage");
+	outputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+	outputArgument.valueRank = UA_VALUERANK_SCALAR; /* what is this? */
+	
+	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
+	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Send a string via serial port");
+	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Send a message");
+	sendAttr.executable = true;
+	sendAttr.userExecutable = true;
+	UA_Server_addMethodNode(server, UA_NODEID_NUMERIC(1,62541),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
-                            UA_QUALIFIEDNAME(1, "hello world"),
-                            helloAttr, &helloWorldMethodCallback,
-                            1, &inputArgument, 1, &outputArgument, NULL, NULL);
+                            UA_QUALIFIEDNAME(1, "send message"),
+                            sendAttr, &sportSendMsgMethodCallback,
+                            2, &inputArguments, 1, &outputArgument, NULL, NULL);
 }
-*/
 
-static int sport_send_msg(char msg[], int fd)
-{
-    int wlen = (int)write(fd, msg, strlen(msg)); /* number of bytes written */
-    if (wlen != (int)strlen(msg)) {
-        printf("Error from write: %d, %d\n", wlen, errno);
-    }
-    tcdrain(fd);    /* delay for output */
-    return wlen;
-}
+
+
+
+
 
 static char* sport_listen(char msg[], int fd)
 {
