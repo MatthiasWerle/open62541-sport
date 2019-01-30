@@ -7,12 +7,12 @@
 
 /* predefined identifier for later use */
 UA_NodeId motorControllerTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1001}};
-// UA_String myString = UA_STRING("test"); /* from example */
 
 static void
 defineObjectTypes(UA_Server *server) {
-	UA_Int32 defInt = 161;
-	UA_String defStr = UA_STRING("Alerta");
+	UA_Int32 defInt = 161;														/* default variable */
+	UA_String defStr = UA_STRING("Alerta");										/* default variable */
+	
     /* Define the object type for "Device" */
     UA_NodeId deviceTypeId; /* get the nodeid assigned by the server */
     UA_ObjectTypeAttributes dtAttr = UA_ObjectTypeAttributes_default;
@@ -123,6 +123,22 @@ defineObjectTypes(UA_Server *server) {
                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
                            UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 
+	/* Filedescriptor */
+    UA_VariableAttributes fdAttr = UA_VariableAttributes_default;
+    fdAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Filedescriptor for serial port");
+    fdAttr.valueRank = UA_VALUERANK_SCALAR;
+	fdAttr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
+    fdAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE; /* potential security risk */
+    UA_Variant_setScalar(&fdAttr.value, &defInt, &UA_TYPES[UA_TYPES_INT32]);
+	UA_NodeId fdId;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+                              UA_QUALIFIEDNAME(1, "fdId"),
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), fdAttr, NULL, &fdId);
+    /* Make the fd variable mandatory */
+    UA_Server_addReference(server, fdId,
+                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
+                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 }
 
 static void
