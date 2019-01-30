@@ -23,55 +23,6 @@
 
 //#define DISPLAY_STRING
 
-static UA_StatusCode
-helloWorldMethodCallback(UA_Server *server,
-                         const UA_NodeId *sessionId, void *sessionHandle,
-                         const UA_NodeId *methodId, void *methodContext,
-                         const UA_NodeId *objectId, void *objectContext,
-                         size_t inputSize, const UA_Variant *input,
-                         size_t outputSize, UA_Variant *output) {
-    UA_String *inputStr = (UA_String*)input->data;
-    UA_String tmp = UA_STRING_ALLOC("Hello ");
-    if(inputStr->length > 0) {
-        tmp.data = (UA_Byte *)UA_realloc(tmp.data, tmp.length + inputStr->length);
-        memcpy(&tmp.data[tmp.length], inputStr->data, inputStr->length);
-        tmp.length += inputStr->length;
-    }
-    UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]);
-    UA_String_clear(&tmp);
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Hello World was called");
-    return UA_STATUSCODE_GOOD;
-}
-
-static void
-addHellWorldMethod(UA_Server *server) {
-    UA_Argument inputArgument;
-    UA_Argument_init(&inputArgument);
-    inputArgument.description = UA_LOCALIZEDTEXT("en-US", "A String");
-    inputArgument.name = UA_STRING("MyInput");
-    inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    inputArgument.valueRank = UA_VALUERANK_SCALAR;
-
-    UA_Argument outputArgument;
-    UA_Argument_init(&outputArgument);
-    outputArgument.description = UA_LOCALIZEDTEXT("en-US", "A String");
-    outputArgument.name = UA_STRING("MyOutput");
-    outputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    outputArgument.valueRank = UA_VALUERANK_SCALAR;
-
-    UA_MethodAttributes helloAttr = UA_MethodAttributes_default;
-    helloAttr.description = UA_LOCALIZEDTEXT("en-US","Say `Hello World`");
-    helloAttr.displayName = UA_LOCALIZEDTEXT("en-US","Hello World");
-    helloAttr.executable = true;
-    helloAttr.userExecutable = true;
-    UA_Server_addMethodNode(server, UA_NODEID_NUMERIC(1,62541),
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
-                            UA_QUALIFIEDNAME(1, "hello world"),
-                            helloAttr, &helloWorldMethodCallback,
-                            1, &inputArgument, 1, &outputArgument, NULL, NULL);
-}
-
 static void
 addVariable(UA_Server *server)
 {
@@ -117,11 +68,19 @@ int main(int argc, char** argv)
     UA_Server *server = UA_Server_new(config);
 
     /* 00) Add a variable node */
-    printf("fyi start adding variable... \n");
-	addSportSendMsgMethod(server);
-    addHellWorldMethod(server);
+    printf("fyi adding variables ... \n");
 	addVariable(server);
 	addVariable_fdSPort(server);
+    printf("fyi adding object instances ... \n");
+    defineObjectTypes(server);
+    addMotorControllerObjectInstance(server, "motorController1");
+    addMotorControllerObjectInstance(server, "motorController2");
+    addMotorControllerTypeConstructor(server);								/* What is this for? */
+    addMotorControllerObjectInstance(server, "motorController3");
+    addMotorControllerObjectInstance(server, "motorController4");
+    printf("fyi adding methods ... \n");
+	addSportSendMsgMethod(server);
+
 
     /* 10) set connection settings for serial port */
     int fd = set_fd(portname);					/* file descriptor for serial port */
