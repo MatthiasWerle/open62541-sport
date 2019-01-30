@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include <string.h>
+#include <stdint.h>
 
 #include "sport.h" /* serial port communication */
 
@@ -117,8 +118,8 @@ int main(int argc, char** argv)
 
     /* 00) Add a variable node */
     printf("fyi start adding variable... \n");
-    addHellWorldMethod(server);
 	addSportSendMsgMethod(server);
+    addHellWorldMethod(server);
 	addVariable(server);
 	addVariable_fdSPort(server);
 

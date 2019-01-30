@@ -117,19 +117,32 @@ sportSendMsgMethodCallback(UA_Server *server,
                          const UA_NodeId *sessionId, void *sessionHandle,
                          const UA_NodeId *methodId, void *methodContext,
                          const UA_NodeId *objectId, void *objectContext,
-						 size_t inputSize1, const UA_Variant *inputFd,
-						 size_t inputSize2, const UA_Variant *inputMsg,
+						 size_t inputSize, const UA_Variant *input,
+//						 size_t inputSize1, const UA_Variant *inputFd,
+//						 size_t inputSize2, const UA_Variant *inputMsg,
                          size_t outputSize, UA_Variant *output)
 //						 const char msg[], const int fd
 {
+	/* debug stuff*/
+    UA_Int32 *inputInt = (UA_Int32*)input[0].data;
+	UA_String *inputStr = (UA_String*)input[1].data;
+//	UA_String *inputStr1 = (UA_String*)input[1]->data;
+
+	printf("stuff to check: \n");
+	printf("(int)*inputInt = %d \n",(int)*inputInt);
+	printf("*(UA_Int32*)input[0].data = %d \n", *(UA_Int32*)input[0].data);
+	printf("(char*)input[1].data = %.*s \n", (int)inputStr->length, (char*)inputStr->data);
+//	printf("(char*)inputStr1 = %s \n", (char*)inputStr1);
+
 //	UA_Int32 wlen;
-	UA_String *inputStr = (UA_String*)inputMsg->data;
-	UA_Int32 *inputInt = (UA_Int32*)inputFd->data;
-    UA_Int32 wlen = (UA_Int32)write((int)*inputInt, (char)*inputStr, strlen((char)*inputStr)); /* number of bytes written */
-//    if (wlen != (int)strlen(msg)) {
+//	char *inputStr = (char*)inputMsg->data;
+//	int32_t *inputInt = (int32_t*)inputFd->data;
+
+//    UA_Int32 wlen = (UA_Int32)write((int)inputFd->data, inputMsg->data, inputMsg->arrayLength); /* number of bytes written */
+//    if (wlen != (UA_Int32)inputMsg->arrayLength) {
 //        printf("Error from write: %d, %d\n", wlen, errno);
 //    }
-//    tcdrain(fd);    /* delay for output */
+//    tcdrain((int)inputFd->data);    /* delay for output */
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
     return UA_STATUSCODE_GOOD;
 }
@@ -146,6 +159,7 @@ addSportSendMsgMethod(UA_Server *server){
 	UA_Argument_init(&inputArguments[1]);
 	inputArguments[1].description = UA_LOCALIZEDTEXT("en-US", "A string, message to be sent");
 	inputArguments[1].name = UA_STRING("InputMessage");
+//	inputArguments[1].dataType = UA_TYPES[UA_TYPES_INT32].typeId;	
 	inputArguments[1].dataType = UA_TYPES[UA_TYPES_STRING].typeId;
 	inputArguments[1].valueRank = UA_VALUERANK_SCALAR; /* what is this? */
 	
@@ -161,12 +175,12 @@ addSportSendMsgMethod(UA_Server *server){
 	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Send a message");
 	sendAttr.executable = true;
 	sendAttr.userExecutable = true;
-	UA_Server_addMethodNode(server, UA_NODEID_NUMERIC(1,62541),
+	UA_Server_addMethodNode(server, UA_NODEID_STRING(1, "SportSendMsg"),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
-                            UA_QUALIFIEDNAME(1, "send message"),
+                            UA_QUALIFIEDNAME(1, "SportSendMsg"),
                             sendAttr, &sportSendMsgMethodCallback,
-                            2, &inputArguments, 1, &outputArgument, NULL, NULL);
+                            2, inputArguments, 1, &outputArgument, NULL, NULL);
 }
 
 
