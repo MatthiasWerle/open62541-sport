@@ -73,17 +73,20 @@ int main(int argc, char** argv)
 	addVariable_fdSPort(server);
     printf("fyi adding object instances ... \n");
     defineObjectTypes(server);
-    addMotorControllerObjectInstance(server, "motorController1");
-    addMotorControllerObjectInstance(server, "motorController2");
-    addMotorControllerTypeConstructor(server);								/* What is this for? */
-    addMotorControllerObjectInstance(server, "motorController3");
-    addMotorControllerObjectInstance(server, "motorController4");
+    addMotorControllerObjectInstance(server, "motorController1", "MCId1");
+    addMotorControllerObjectInstance(server, "motorController2", "MCId2");
+    addMotorControllerTypeConstructor(server);	/* need this? sets status to on and propably initializes lifecycle*/
+    addMotorControllerObjectInstance(server, "motorController3", "MCId3");
+    addMotorControllerObjectInstance(server, "motorController4", "MCId4");
     printf("fyi adding methods ... \n");
 	addSportSendMsgMethod(server);
+	addHellWorldMethod(server);
+//	addFdMethod(server);
 
 
     /* 10) set connection settings for serial port */
     int fd = set_fd(portname);					/* file descriptor for serial port */
+	printf(" portname: %s \n fd: %d \n", portname, fd);
     printf("fyi start setting interface attributes... \n");
 	set_interface_attribs(fd, B115200);         /*baudrate 115200, 8 bits, no parity, 1 stop bit */
 
@@ -96,6 +99,15 @@ int main(int argc, char** argv)
 	set_blocking(fd, 0);
 	sport_listen(msg, fd);
 	printf("fyi end of listening... \n");
+
+	/* changing object properties */
+	UA_Variant fdId;
+	UA_String fdvalue = UA_STRING("1337");
+	UA_Variant_setScalar(&fdId, &fdvalue, &UA_TYPES[UA_TYPES_STRING]);
+	
+//	UA_StatusCode test = UA_Server_readValue(server, UA_NODEID_STRING(1, "MCId1"), &fdAttr.value);
+//	printf("UA_Statuscode test = %d\n", (int)test);
+//	UA_Server_writeObjectProperty(server, UA_NODEID_STRING(1,"MCId1"), UA_QUALIFIEDNAME(1, "fdId"), fdId);
 
     /* 20) Run the server loop */
     UA_StatusCode status = UA_Server_run(server, &running);
