@@ -1,12 +1,7 @@
 #include <signal.h>
-
-
-//#include "open62541.h"
-
 #include <ua_server.h>
 #include <ua_config_default.h>
 #include <ua_log_stdout.h>
-
 
 #include <errno.h>
 #include <fcntl.h>
@@ -21,30 +16,6 @@
 
 #define DISPLAY_STRING /* for debugging sport.h */
 #include "sport.h" /* serial port communication */
-
-
-static void
-addVariable(UA_Server *server)
-{
-    /* Define the node attributes */
-    UA_VariableAttributes attr = UA_VariableAttributes_default;
-    UA_Int32 myInteger = 42;
-    UA_Variant_setScalar(&attr.value, &myInteger, &UA_TYPES[UA_TYPES_INT32]);
-    attr.description = UA_LOCALIZEDTEXT("en-US", "the answer");
-    attr.displayName = UA_LOCALIZEDTEXT("en-US", "the answer");
-    attr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-
-    /* Add the variable node to the information model */
-    /* Define where the node shall be added with which browsename */
-    UA_NodeId newNodeId = UA_NODEID_STRING(1, "the.answer");
-    UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
-    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-    UA_NodeId variableType = UA_NODEID_NULL; /* take the default variable type */
-    UA_QualifiedName browseName = UA_QUALIFIEDNAME(1, "the answer");
-    UA_Server_addVariableNode(server, newNodeId, parentNodeId, parentReferenceNodeId,
-                              browseName, variableType, attr, NULL, NULL);
-}
 
 /******************/
 /* PROGRAMM START */
@@ -73,23 +44,26 @@ int main(int argc, char** argv)
 	UA_NodeId nodeIdMC3 = UA_NODEID_STRING(1,"MCId3");
 	UA_NodeId nodeIdMC4 = UA_NODEID_STRING(1,"MCId4");
 
-    printf("fyi adding variables ... \n");
-	addVariable(server);
-	addVariable_fdSPort(server);
     printf("fyi adding object instances ... \n");
     defineObjectTypes(server);
 
     addMotorControllerObjectInstance(server, "motorController1", &nodeIdMC1);
-	setttyname(server, &nodeIdMC1, "/dev/ttyUSB0");
+		setttyname(server, &nodeIdMC1, ttyname1);
+
 	addMotorControllerObjectInstance(server, "motorController2", &nodeIdMC2);
+		UA_String valStr = UA_STRING("/dev/ttyUSB1");
+		UA_Variant valVar;
+		UA_Variant_setScalar(&valVar, &valStr, &UA_TYPES[UA_TYPES_STRING]);
+		setChildAttrVal(server, &nodeIdMC2, "TTYname", valVar, UA_TYPES[UA_TYPES_STRING]);
+
 	addMotorControllerTypeConstructor(server);	/* need this? sets status to on and propably initializes lifecycle*/
 	addMotorControllerObjectInstance(server, "motorController3", &nodeIdMC3);
 	addMotorControllerObjectInstance(server, "motorController4", &nodeIdMC4);
+
 	printf("fyi adding methods ... \n");
 	addSportSendMsgMethod(server);
 	addHellWorldMethod(server);
 //	addFdMethod(server);
-
 
     /* 10) set connection settings for serial port */
     int fd = set_fd(ttyname1);					/* file descriptor for serial port */

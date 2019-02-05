@@ -111,7 +111,7 @@ defineObjectTypes(UA_Server *server) {
     ttynameAttr.displayName = UA_LOCALIZEDTEXT("en-US", "TTYname");
     ttynameAttr.valueRank = UA_VALUERANK_SCALAR;
 	ttynameAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    ttynameAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    ttynameAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
     UA_Variant_setScalar(&ttynameAttr.value, &defStr, &UA_TYPES[UA_TYPES_STRING]);
 	UA_NodeId ttynameId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
@@ -128,7 +128,7 @@ defineObjectTypes(UA_Server *server) {
     fdAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Filedescriptor for serial port");
     fdAttr.valueRank = UA_VALUERANK_SCALAR;
 	fdAttr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-    fdAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE; /* potential security risk */
+    fdAttr.accessLevel = UA_ACCESSLEVELMASK_READ; /* potential security risk */
     UA_Variant_setScalar(&fdAttr.value, &defInt, &UA_TYPES[UA_TYPES_INT32]);
 	UA_NodeId fdId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
@@ -147,7 +147,6 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
     oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
 //    oAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-//    UA_NodeId MCNodeId = UA_NODEID_STRING(1, Id);
     UA_Server_addObjectNode(server, *nodeId,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
@@ -157,10 +156,40 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
                             oAttr, NULL, NULL);
 }
 
-//static UA_StatusCode 
-//setChildValue(UA_Server *server, const UA_NodeId *nodeId, char* browsename, UA_Variant newval, UA_DataType type) {
-//	...
-//}
+/************************/
+/* edit node attributes */
+/************************/
+
+static UA_StatusCode 
+setChildAttrVal(UA_Server *server, const UA_NodeId *nodeId, char* browsename, 
+								UA_Variant newval, UA_DataType type) {
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "set Child Attribute Value Method called");
+
+	/* Find NodeId of status child variable */
+	UA_RelativePathElement rpe;
+	UA_RelativePathElement_init(&rpe);
+	rpe.referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT);
+	rpe.isInverse = false;
+	rpe.includeSubtypes = false;
+	rpe.targetName = UA_QUALIFIEDNAME(1, browsename);
+
+	UA_BrowsePath bp;
+	UA_BrowsePath_init(&bp);
+	bp.startingNode = *nodeId;
+	bp.relativePath.elementsSize = 1;
+	bp.relativePath.elements = &rpe;	
+
+	UA_BrowsePathResult bpr =
+		UA_Server_translateBrowsePathToNodeIds(server, &bp);
+	if(bpr.statusCode != UA_STATUSCODE_GOOD || bpr.targetsSize < 1) {
+		return bpr.statusCode; }
+		
+	/* Set the status value */
+	UA_Server_writeValue(server, bpr.targets[0].targetId.nodeId, newval);
+	UA_BrowsePathResult_clear(&bpr);
+		
+	return UA_STATUSCODE_GOOD;
+}
 
 static UA_StatusCode
 setttyname(UA_Server *server, const UA_NodeId *nodeId, char *newttyname) {
@@ -294,35 +323,9 @@ addHellWorldMethod(UA_Server *server) {
                             1, &inputArgument, 1, &outputArgument, NULL, NULL);
 }
 
-static UA_StatusCode
-addVariable_fdSPort(UA_Server *server) 
-{
-    /* Define the attribute of the fdSPort variable node */
-    UA_VariableAttributes attr = UA_VariableAttributes_default;
-    UA_Int32 fdSPort = 1234;
-    UA_Variant_setScalar(&attr.value, &fdSPort, &UA_TYPES[UA_TYPES_INT32]);
-    attr.description = UA_LOCALIZEDTEXT("en-US","file descriptor port example");
-    attr.displayName = UA_LOCALIZEDTEXT("en-US","file descriptor port example");
-    attr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-
-    /* Add the variable node to the information model */
-    UA_NodeId fdSPortNodeId = UA_NODEID_STRING(1, "fd.PortExample");
-    UA_QualifiedName fdSPortName = UA_QUALIFIEDNAME(1, "fd port example");
-    UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
-    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-    UA_Server_addVariableNode(server, fdSPortNodeId, parentNodeId,
-                              parentReferenceNodeId, fdSPortName,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), attr, NULL, NULL);
-	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "addVariable_fdSPort was called");
-	return UA_STATUSCODE_GOOD;
-}
-
 /**************************/
 /* serial port connection */
 /**************************/
-
-
 
 /* set file descriptor for a serial port */
 static int 
@@ -348,12 +351,12 @@ set_interface_attribs(int fd, int speed)
         return UA_STATUSCODE_BADUNEXPECTEDERROR;
     }
 
-//    cfsetospeed(&tty, (speed_t)speed);
-//    cfsetispeed(&tty, (speed_t)speed);
+	cfsetospeed(&tty, (speed_t)speed);
+	cfsetispeed(&tty, (speed_t)speed);
 
 	/* set baud rates to 19200 */
-	cfsetospeed(&tty, B19200);
-	cfsetispeed(&tty, B19200);
+//	cfsetospeed(&tty, B19200);
+//	cfsetispeed(&tty, B19200);
 
     tty.c_cflag |= (unsigned int)(CLOCAL | CREAD);    /* ignore modem controls */
     tty.c_cflag &= ~(unsigned int)CSIZE;
@@ -460,7 +463,6 @@ addSportSendMsgMethod(UA_Server *server){
 	UA_Argument_init(&inputArguments[1]);
 	inputArguments[1].description = UA_LOCALIZEDTEXT("en-US", "A string, message to be sent");
 	inputArguments[1].name = UA_STRING("InputMessage");
-//	inputArguments[1].dataType = UA_TYPES[UA_TYPES_INT32].typeId;	
 	inputArguments[1].dataType = UA_TYPES[UA_TYPES_STRING].typeId;
 	inputArguments[1].valueRank = UA_VALUERANK_SCALAR; /* what is this? */
 	
@@ -484,6 +486,7 @@ addSportSendMsgMethod(UA_Server *server){
                             sendAttr, &sportSendMsgMethodCallback,
                             2, inputArguments, 1, &outputArgument, NULL, NULL);
 }
+
 
 static char* sport_listen(char msg[], int fd)
 {
