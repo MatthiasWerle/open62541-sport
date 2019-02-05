@@ -106,20 +106,20 @@ defineObjectTypes(UA_Server *server) {
                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
                            UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 
-	/* Portname */
-    UA_VariableAttributes portnameAttr = UA_VariableAttributes_default;
-    portnameAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Portname");
-    portnameAttr.valueRank = UA_VALUERANK_SCALAR;
-	portnameAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    portnameAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_Variant_setScalar(&portnameAttr.value, &defStr, &UA_TYPES[UA_TYPES_STRING]);
-	UA_NodeId portnameId;
+	/* ttyname */
+    UA_VariableAttributes ttynameAttr = UA_VariableAttributes_default;
+    ttynameAttr.displayName = UA_LOCALIZEDTEXT("en-US", "TTYname");
+    ttynameAttr.valueRank = UA_VALUERANK_SCALAR;
+	ttynameAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+    ttynameAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    UA_Variant_setScalar(&ttynameAttr.value, &defStr, &UA_TYPES[UA_TYPES_STRING]);
+	UA_NodeId ttynameId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "portnameId"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), portnameAttr, NULL, &portnameId);
-    /* Make the stepFreq variable mandatory */
-    UA_Server_addReference(server, portnameId,
+                              UA_QUALIFIEDNAME(1, "TTYname"),
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), ttynameAttr, NULL, &ttynameId);
+    /* Make the ttyname variable mandatory */
+    UA_Server_addReference(server, ttynameId,
                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
                            UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 
@@ -142,18 +142,57 @@ defineObjectTypes(UA_Server *server) {
 }
 
 static void
-addMotorControllerObjectInstance(UA_Server *server, char *name, char *Id) {
+addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId) 
+{
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
     oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
 //    oAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
 //    UA_NodeId MCNodeId = UA_NODEID_STRING(1, Id);
-    UA_Server_addObjectNode(server, UA_NODEID_STRING(1,Id),
+    UA_Server_addObjectNode(server, *nodeId,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
                             UA_QUALIFIEDNAME(1, name),
                             motorControllerTypeId, /* this refers to the object type
                                            identifier */
                             oAttr, NULL, NULL);
+}
+
+//static UA_StatusCode 
+//setChildValue(UA_Server *server, const UA_NodeId *nodeId, char* browsename, UA_Variant newval, UA_DataType type) {
+//	...
+//}
+
+static UA_StatusCode
+setttyname(UA_Server *server, const UA_NodeId *nodeId, char *newttyname) {
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "set ttyname called");
+	
+	/* Find NodeId of status child variable */
+    UA_RelativePathElement rpe;
+    UA_RelativePathElement_init(&rpe);
+    rpe.referenceTypeId = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT);
+    rpe.isInverse = false;
+    rpe.includeSubtypes = false;
+    rpe.targetName = UA_QUALIFIEDNAME(1, "TTYname");
+
+    UA_BrowsePath bp;
+    UA_BrowsePath_init(&bp);
+    bp.startingNode = *nodeId;
+    bp.relativePath.elementsSize = 1;
+    bp.relativePath.elements = &rpe;	
+
+    UA_BrowsePathResult bpr =
+        UA_Server_translateBrowsePathToNodeIds(server, &bp);
+    if(bpr.statusCode != UA_STATUSCODE_GOOD || bpr.targetsSize < 1) {
+		return bpr.statusCode; }
+		
+    /* Set the status value */
+    UA_String ttyname = UA_STRING(newttyname);
+    UA_Variant value;
+    UA_Variant_setScalar(&value, &ttyname, &UA_TYPES[UA_TYPES_STRING]);
+    UA_Server_writeValue(server, bpr.targets[0].targetId.nodeId, value);
+    UA_BrowsePathResult_clear(&bpr);
+		
+	return UA_STATUSCODE_GOOD;
 }
 
 static UA_StatusCode
@@ -179,9 +218,8 @@ motorControllerTypeConstructor(UA_Server *server,
 
     UA_BrowsePathResult bpr =
         UA_Server_translateBrowsePathToNodeIds(server, &bp);
-    if(bpr.statusCode != UA_STATUSCODE_GOOD ||
-       bpr.targetsSize < 1)
-        return bpr.statusCode;
+    if(bpr.statusCode != UA_STATUSCODE_GOOD || bpr.targetsSize < 1) {
+		return bpr.statusCode; }
 
     /* Set the status value */
     UA_Boolean status = true;
@@ -203,9 +241,9 @@ addMotorControllerTypeConstructor(UA_Server *server) {
     UA_Server_setNodeTypeLifecycle(server, motorControllerTypeId, lifecycle);
 }
 
-/*****************************/
-/* adding methods to objects */
-/*****************************/
+/**************************************/
+/* examples adding methods to objects */
+/**************************************/
 
 static UA_StatusCode
 helloWorldMethodCallback(UA_Server *server,
@@ -256,11 +294,6 @@ addHellWorldMethod(UA_Server *server) {
                             1, &inputArgument, 1, &outputArgument, NULL, NULL);
 }
 
-
-/**************************/
-/* serial port connection */
-/**************************/
-
 static UA_StatusCode
 addVariable_fdSPort(UA_Server *server) 
 {
@@ -268,14 +301,14 @@ addVariable_fdSPort(UA_Server *server)
     UA_VariableAttributes attr = UA_VariableAttributes_default;
     UA_Int32 fdSPort = 1234;
     UA_Variant_setScalar(&attr.value, &fdSPort, &UA_TYPES[UA_TYPES_INT32]);
-    attr.description = UA_LOCALIZEDTEXT("en-US","file descriptor port");
-    attr.displayName = UA_LOCALIZEDTEXT("en-US","file descriptor port");
+    attr.description = UA_LOCALIZEDTEXT("en-US","file descriptor port example");
+    attr.displayName = UA_LOCALIZEDTEXT("en-US","file descriptor port example");
     attr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
     attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
 
     /* Add the variable node to the information model */
-    UA_NodeId fdSPortNodeId = UA_NODEID_STRING(1, "fd.Port");
-    UA_QualifiedName fdSPortName = UA_QUALIFIEDNAME(1, "fd port");
+    UA_NodeId fdSPortNodeId = UA_NODEID_STRING(1, "fd.PortExample");
+    UA_QualifiedName fdSPortName = UA_QUALIFIEDNAME(1, "fd port example");
     UA_NodeId parentNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
     UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
     UA_Server_addVariableNode(server, fdSPortNodeId, parentNodeId,
@@ -285,14 +318,19 @@ addVariable_fdSPort(UA_Server *server)
 	return UA_STATUSCODE_GOOD;
 }
 
+/**************************/
+/* serial port connection */
+/**************************/
+
+
 
 /* set file descriptor for a serial port */
 static int 
-set_fd(char *portname)
+set_fd(char *ttyname)
 {
-    int fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC); /* read and write, no controlling terminal of process,  */
+    int fd = open(ttyname, O_RDWR | O_NOCTTY | O_SYNC); /* read and write, no controlling terminal of process,  */
     if (fd < 0){
-        printf("Error opening %s: %s\n", portname, strerror(errno));
+        printf("Error opening %s: %s\n", ttyname, strerror(errno));
         return -1;
     }
     return fd;
@@ -331,8 +369,8 @@ set_interface_attribs(int fd, int speed)
 
 	printf("tty c_cflag %d \n",tty.c_cflag);
     /* fetch bytes as they become available */
-    tty.c_cc[VMIN] = 1;
-    tty.c_cc[VTIME] = 1;
+    tty.c_cc[VMIN] = 1;	/* enable timeout to receive first charakter of read if non-zero; read will block until VMIN bytes are received */
+    tty.c_cc[VTIME] = 1; /* timeout time in tenth of a second */
 
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
         printf("Error from tcsetattr: %s\n", strerror(errno));
@@ -373,6 +411,7 @@ set_blocking (int fd, int should_block)
 //}
 //    return wlen;
 
+
 /* callable by server and client */
 static UA_StatusCode 
 sportSendMsgMethodCallback(UA_Server *server,
@@ -382,21 +421,29 @@ sportSendMsgMethodCallback(UA_Server *server,
 						 size_t inputSize, const UA_Variant *input,
                          size_t outputSize, UA_Variant *output)
 {
-	/* debug stuff*/
-    UA_Int32 *inputInt = (UA_Int32*)input[0].data;
-	UA_String *inputStr = (UA_String*)input[1].data;
+    UA_Int32 *inputInt = (UA_Int32*)input[0].data;	/* filedescriptor */
+	UA_String *inputStr = (UA_String*)input[1].data; /* message to be sent */
+	/* to check: inputInt.length udn inputStr.length */
 
+
+	/* debug stuff*/
 	printf("stuff to check: \n");
 	printf("(int)*inputInt = %d \n",(int)*inputInt);
 	printf("*(UA_Int32*)input[0].data = %d \n", *(UA_Int32*)input[0].data);
-	printf("(char*)input[1].data = %.*s \n", (int)inputStr->length, (char*)inputStr->data);
+	printf("inputStr length and data = %.*s \n", (int)inputStr->length, (char*)inputStr->data);
 
-	int wlen;
-    wlen = (int)write((int)*inputInt, inputStr, inputStr->length); /* number of bytes written */
-    if (sizeof(wlen) != sizeof(inputStr->length)) {
-        printf("Error from write: %d, %d\n", wlen, errno);
+	ssize_t wlen;
+    wlen = write((int)*inputInt, inputStr, inputStr->length); /* number of bytes written */
+	printf("wlen = %zu\n",wlen);
+	printf("inputStr->length = %zu\n", inputStr->length);
+    if (wlen != (ssize_t)inputStr->length) {
+        printf("Error from write: %zu, %d\n", wlen, errno);
     }
     tcdrain((int)*inputInt);    /* delay for output */
+	
+	/* read on port to check if acknowledgement was sent back */
+	
+	
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
     return UA_STATUSCODE_GOOD;
 }

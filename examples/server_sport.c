@@ -19,9 +19,9 @@
 #include <string.h>
 #include <stdint.h>
 
+#define DISPLAY_STRING /* for debugging sport.h */
 #include "sport.h" /* serial port communication */
 
-//#define DISPLAY_STRING
 
 static void
 addVariable(UA_Server *server)
@@ -49,7 +49,7 @@ addVariable(UA_Server *server)
 /******************/
 /* PROGRAMM START */
 /******************/
-char *portname = "/dev/ttyUSB0";
+char *ttyname1 = "/dev/ttyUSB0";						/* TODO: implement ttyname.c to find ttyname with deviceID */
 char msg[] = "Output Message for test purposes"; 	/* output message */
 
 UA_Boolean running = true;
@@ -68,27 +68,35 @@ int main(int argc, char** argv)
     UA_Server *server = UA_Server_new(config);
 
     /* 00) Add a variable node */
+	UA_NodeId nodeIdMC1 = UA_NODEID_STRING(1,"MCId1");
+	UA_NodeId nodeIdMC2 = UA_NODEID_STRING(1,"MCId2");
+	UA_NodeId nodeIdMC3 = UA_NODEID_STRING(1,"MCId3");
+	UA_NodeId nodeIdMC4 = UA_NODEID_STRING(1,"MCId4");
+
     printf("fyi adding variables ... \n");
 	addVariable(server);
 	addVariable_fdSPort(server);
     printf("fyi adding object instances ... \n");
     defineObjectTypes(server);
-    addMotorControllerObjectInstance(server, "motorController1", "MCId1");
-    addMotorControllerObjectInstance(server, "motorController2", "MCId2");
-    addMotorControllerTypeConstructor(server);	/* need this? sets status to on and propably initializes lifecycle*/
-    addMotorControllerObjectInstance(server, "motorController3", "MCId3");
-    addMotorControllerObjectInstance(server, "motorController4", "MCId4");
-    printf("fyi adding methods ... \n");
+
+    addMotorControllerObjectInstance(server, "motorController1", &nodeIdMC1);
+	setttyname(server, &nodeIdMC1, "/dev/ttyUSB0");
+	addMotorControllerObjectInstance(server, "motorController2", &nodeIdMC2);
+	addMotorControllerTypeConstructor(server);	/* need this? sets status to on and propably initializes lifecycle*/
+	addMotorControllerObjectInstance(server, "motorController3", &nodeIdMC3);
+	addMotorControllerObjectInstance(server, "motorController4", &nodeIdMC4);
+	printf("fyi adding methods ... \n");
 	addSportSendMsgMethod(server);
 	addHellWorldMethod(server);
 //	addFdMethod(server);
 
 
     /* 10) set connection settings for serial port */
-    int fd = set_fd(portname);					/* file descriptor for serial port */
-	printf(" portname: %s \n fd: %d \n", portname, fd);
+    int fd = set_fd(ttyname1);					/* file descriptor for serial port */
+	printf(" ttyname1: %s \n fd: %d \n", ttyname1, fd);
     printf("fyi start setting interface attributes... \n");
 	set_interface_attribs(fd, B115200);         /*baudrate 115200, 8 bits, no parity, 1 stop bit */
+	set_blocking(fd, 0);						/* set blocking for read off */
 
     /* 11) simple output on serial port */
 	printf("fyi start sending a message... \n");
@@ -96,11 +104,25 @@ int main(int argc, char** argv)
 
     /* 12) simple noncanonical input */
 	printf("fyi start to listen... \n");
-	set_blocking(fd, 0);
 	sport_listen(msg, fd);
 	printf("fyi end of listening... \n");
 
-	/* changing object properties */
+	/* TESTING SITE START */
+	UA_String teststring;
+	teststring = UA_STRING("#Important Message");
+	printf("teststring.data = %s\n", teststring.data);
+	printf("teststring.length = %zu\n", teststring.length);
+	printf("teststring.data+1= %s\n", teststring.data+1);
+	printf("teststring.length-1 = %zu\n", teststring.length-1);
+	printf("sizeof(teststring.length) = %zu \n", sizeof(teststring.length));
+
+	int testint = 5;
+	printf("testint = 5\n");
+	printf("sizeof(testint) = %zu \n", sizeof(testint));
+	/* TESTING SITE END */
+	
+
+	/* WIP changing object properties, yet not working */
 	UA_Variant fdId;
 	UA_String fdvalue = UA_STRING("1337");
 	UA_Variant_setScalar(&fdId, &fdvalue, &UA_TYPES[UA_TYPES_STRING]);
