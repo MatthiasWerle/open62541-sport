@@ -60,6 +60,11 @@ int main(int argc, char** argv)
 	addMotorControllerObjectInstance(server, "motorController3", &nodeIdMC3);
 	addMotorControllerObjectInstance(server, "motorController4", &nodeIdMC4);
 
+	UA_NodeId nodeIdMC3tty;
+	nodeIdMC3tty.identifierType = UA_NODEIDTYPE_NUMERIC;
+	getChildNodeId(server, &nodeIdMC3, "TTYname", &nodeIdMC3tty);
+	printf("child nodeId tty MC3: %u \n", nodeIdMC3tty.identifier.numeric);
+
 	printf("fyi adding methods ... \n");
 	addSportSendMsgMethod(server);
 	addHellWorldMethod(server);
@@ -86,8 +91,11 @@ int main(int argc, char** argv)
 	teststring = UA_STRING("#Important Message");
 	printf("teststring.data = %s\n", teststring.data);
 	printf("teststring.length = %zu\n", teststring.length);
-	printf("teststring.data+1= %s\n", teststring.data+1);
-	printf("teststring.length-1 = %zu\n", teststring.length-1);
+	printf("strlen((char*)teststring.data) = %zu\n", strlen((char*) teststring.data));
+	teststring.data += 1; printf("teststring.data +=1;\n");
+	printf("teststring.data = %s\n", teststring.data);
+	printf("teststring.length = %zu\n", teststring.length);
+	printf("strlen((char*)teststring.data) = %zu\n", strlen((char*) teststring.data));
 	printf("sizeof(teststring.length) = %zu \n", sizeof(teststring.length));
 
 	int testint = 5;
