@@ -14,21 +14,16 @@
 #include <string.h>
 #include <stdint.h>
 
-#define DISPLAY_STRING /* for debugging sport.h */
-#include "sport.h" /* serial port communication */
+#define DISPLAY_STRING 			/* for debugging sport.h */
+#include "sport.h" 				/* serial port communication */
+#include "func.h"				/* helpful library eg. set/get nodeId or attributes */
+#include "nanotec_smci_etc.h"	/* command list for step motor controllers from nanotec */
 
 /******************/
 /* PROGRAMM START */
 /******************/
-/* declare test variables */
-char *ttyname1 = "/dev/ttyUSB0";						/* TODO: implement ttyname.c to find ttyname with deviceID */
-char msg[] = "Output Message for test purposes"; 	/* output message */
 
-/* Add nodeIds for object instances created later on */
-UA_NodeId nodeIdMC1 = UA_NODEID_STRING(1,"MCId1");
-UA_NodeId nodeIdMC2 = UA_NODEID_STRING(1,"MCId2");
-UA_NodeId nodeIdMC3 = UA_NODEID_STRING(1,"MCId3");
-UA_NodeId nodeIdMC4 = UA_NODEID_STRING(1,"MCId4");
+
 
 /* server stop handler */
 UA_Boolean running = true;
@@ -40,7 +35,6 @@ static void stopHandler(int sign) {
 /*************/
 /* MAIN LOOP */
 /************/
-
 int main(int argc, char** argv)
 {
     signal(SIGINT, stopHandler);
@@ -50,20 +44,31 @@ int main(int argc, char** argv)
     UA_ServerConfig *config = UA_ServerConfig_new_default();
     UA_Server *server = UA_Server_new(config);
 
+	/* declare test variables */
+	UA_String ttyname1 = UA_STRING("/dev/ttyUSB0");	
+	UA_String ttyname2 = UA_STRING("/dev/ttyUSB1");	
+	UA_Variant valVar;
+	char msg[] = "Output Message for test purposes"; 	/* output message */
+	
+	/* Add nodeIds for object instances created later on */
+	UA_NodeId nodeIdMC1 = UA_NODEID_STRING(1,"MCId1");
+	UA_NodeId nodeIdMC2 = UA_NODEID_STRING(1,"MCId2");
+	UA_NodeId nodeIdMC3 = UA_NODEID_STRING(1,"MCId3");
+	UA_NodeId nodeIdMC4 = UA_NODEID_STRING(1,"MCId4");
+
 	/* Add Object Instances */
-    printf("fyi adding object instances ... \n");
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "define object types and add object instances");
     defineObjectTypes(server);
 
     addMotorControllerObjectInstance(server, "motorController1", &nodeIdMC1);
-		setttyname(server, &nodeIdMC1, ttyname1);
+		UA_Variant_setScalar(&valVar, &ttyname1, &UA_TYPES[UA_TYPES_STRING]);
+		setChildAttrVal(server, &nodeIdMC1, "TTYname", valVar, UA_TYPES[UA_TYPES_STRING]);
 
 	addMotorControllerObjectInstance(server, "motorController2", &nodeIdMC2);
-		UA_String valStr = UA_STRING("/dev/ttyUSB1");
-		UA_Variant valVar;
-		UA_Variant_setScalar(&valVar, &valStr, &UA_TYPES[UA_TYPES_STRING]);
+		UA_Variant_setScalar(&valVar, &ttyname2, &UA_TYPES[UA_TYPES_STRING]);
 		setChildAttrVal(server, &nodeIdMC2, "TTYname", valVar, UA_TYPES[UA_TYPES_STRING]);
 
-	addMotorControllerTypeConstructor(server);	/* need this? sets status to on and propably initializes lifecycle*/
+	addMotorControllerTypeConstructor(server);	/* need this? initializes lifecycle?! */
 	addMotorControllerObjectInstance(server, "motorController3", &nodeIdMC3);
 	addMotorControllerObjectInstance(server, "motorController4", &nodeIdMC4);
 
@@ -76,12 +81,10 @@ int main(int argc, char** argv)
 	/* Adding Methods */
 	printf("fyi adding methods ... \n");
 	addSportSendMsgMethod(server);
-	addHellWorldMethod(server);
-//	addFdMethod(server);
 
     /* set connection settings for serial port */
-    int fd = set_fd(ttyname1);					/* file descriptor for serial port */
-	printf(" ttyname1: %s \n fd: %d \n", ttyname1, fd);
+    int fd = set_fd((char*)ttyname1.data);					/* file descriptor for serial port */
+	printf(" ttyname1: %s \n fd: %d \n", (char*)ttyname1.data, fd);
     printf("fyi start setting interface attributes... \n");
 	set_interface_attribs(fd, B115200);         /*baudrate 115200, 8 bits, no parity, 1 stop bit */
 	set_blocking(fd, 0);						/* set blocking for read off */

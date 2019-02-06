@@ -41,7 +41,7 @@ endmacro()
 # Experimental Examples #
 #########################
 
-add_example(server_sport server_sport.c)
+add_example(server_robolink server_robolink.c)
 
 #############
 # Tutorials #
