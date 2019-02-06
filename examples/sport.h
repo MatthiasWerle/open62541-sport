@@ -128,7 +128,7 @@ defineObjectTypes(UA_Server *server) {
     fdAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Filedescriptor for serial port");
     fdAttr.valueRank = UA_VALUERANK_SCALAR;
 	fdAttr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-    fdAttr.accessLevel = UA_ACCESSLEVELMASK_READ; /* potential security risk */
+    fdAttr.accessLevel = UA_ACCESSLEVELMASK_READ; 
     UA_Variant_setScalar(&fdAttr.value, &defInt, &UA_TYPES[UA_TYPES_INT32]);
 	UA_NodeId fdId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
@@ -137,6 +137,23 @@ defineObjectTypes(UA_Server *server) {
                               UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), fdAttr, NULL, &fdId);
     /* Make the fd variable mandatory */
     UA_Server_addReference(server, fdId,
+                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
+                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
+
+	/* Device Address */
+    UA_VariableAttributes addrAttr = UA_VariableAttributes_default;
+    addrAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Device adress");
+    addrAttr.valueRank = UA_VALUERANK_SCALAR;
+	addrAttr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
+    addrAttr.accessLevel = UA_ACCESSLEVELMASK_READ; 
+    UA_Variant_setScalar(&addrAttr.value, &defInt, &UA_TYPES[UA_TYPES_INT32]);
+	UA_NodeId addrId;
+    UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+                              UA_QUALIFIEDNAME(1, "addrId"),
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), addrAttr, NULL, &addrId);
+    /* Make the device address variable mandatory */
+    UA_Server_addReference(server, addrId,
                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
                            UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 }

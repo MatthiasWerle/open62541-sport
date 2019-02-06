@@ -20,14 +20,26 @@
 /******************/
 /* PROGRAMM START */
 /******************/
+/* declare test variables */
 char *ttyname1 = "/dev/ttyUSB0";						/* TODO: implement ttyname.c to find ttyname with deviceID */
 char msg[] = "Output Message for test purposes"; 	/* output message */
 
+/* Add nodeIds for object instances created later on */
+UA_NodeId nodeIdMC1 = UA_NODEID_STRING(1,"MCId1");
+UA_NodeId nodeIdMC2 = UA_NODEID_STRING(1,"MCId2");
+UA_NodeId nodeIdMC3 = UA_NODEID_STRING(1,"MCId3");
+UA_NodeId nodeIdMC4 = UA_NODEID_STRING(1,"MCId4");
+
+/* server stop handler */
 UA_Boolean running = true;
 static void stopHandler(int sign) {
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "received ctrl-c");
     running = false;
 }
+
+/*************/
+/* MAIN LOOP */
+/************/
 
 int main(int argc, char** argv)
 {
@@ -38,12 +50,7 @@ int main(int argc, char** argv)
     UA_ServerConfig *config = UA_ServerConfig_new_default();
     UA_Server *server = UA_Server_new(config);
 
-    /* 00) Add a variable node */
-	UA_NodeId nodeIdMC1 = UA_NODEID_STRING(1,"MCId1");
-	UA_NodeId nodeIdMC2 = UA_NODEID_STRING(1,"MCId2");
-	UA_NodeId nodeIdMC3 = UA_NODEID_STRING(1,"MCId3");
-	UA_NodeId nodeIdMC4 = UA_NODEID_STRING(1,"MCId4");
-
+	/* Add Object Instances */
     printf("fyi adding object instances ... \n");
     defineObjectTypes(server);
 
@@ -60,33 +67,35 @@ int main(int argc, char** argv)
 	addMotorControllerObjectInstance(server, "motorController3", &nodeIdMC3);
 	addMotorControllerObjectInstance(server, "motorController4", &nodeIdMC4);
 
+	/* TESTING SITE: GET NODEID*/
 	UA_NodeId nodeIdMC3tty;
 	nodeIdMC3tty.identifierType = UA_NODEIDTYPE_NUMERIC;
 	getChildNodeId(server, &nodeIdMC3, "TTYname", &nodeIdMC3tty);
 	printf("child nodeId tty MC3: %u \n", nodeIdMC3tty.identifier.numeric);
 
+	/* Adding Methods */
 	printf("fyi adding methods ... \n");
 	addSportSendMsgMethod(server);
 	addHellWorldMethod(server);
 //	addFdMethod(server);
 
-    /* 10) set connection settings for serial port */
+    /* set connection settings for serial port */
     int fd = set_fd(ttyname1);					/* file descriptor for serial port */
 	printf(" ttyname1: %s \n fd: %d \n", ttyname1, fd);
     printf("fyi start setting interface attributes... \n");
 	set_interface_attribs(fd, B115200);         /*baudrate 115200, 8 bits, no parity, 1 stop bit */
 	set_blocking(fd, 0);						/* set blocking for read off */
 
-    /* 11) simple output on serial port */
+    /* simple output on serial port */
 	printf("fyi start sending a message... \n");
 //    sport_send_msg(msg, fd);
 
-    /* 12) simple noncanonical input */
+    /* simple noncanonical input */
 	printf("fyi start to listen... \n");
 	sport_listen(msg, fd);
 	printf("fyi end of listening... \n");
 
-	/* TESTING SITE START */
+	/* TESTING SITE DATATYPES */
 	UA_String teststring;
 	teststring = UA_STRING("#Important Message");
 	printf("teststring.data = %s\n", teststring.data);
@@ -97,12 +106,9 @@ int main(int argc, char** argv)
 	printf("teststring.length = %zu\n", teststring.length);
 	printf("strlen((char*)teststring.data) = %zu\n", strlen((char*) teststring.data));
 	printf("sizeof(teststring.length) = %zu \n", sizeof(teststring.length));
-
 	int testint = 5;
 	printf("testint = 5\n");
 	printf("sizeof(testint) = %zu \n", sizeof(testint));
-	/* TESTING SITE END */
-	
 
 	/* WIP changing object properties, yet not working */
 	UA_Variant fdId;
