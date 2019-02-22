@@ -159,18 +159,20 @@ defineObjectTypes(UA_Server *server) {
 }
 
 static void
-addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId) 
+addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId, int *fd) 
 {
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
     oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
 //    oAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+	printf("this is argument *fd: %d \n", *fd);
     UA_Server_addObjectNode(server, *nodeId,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
                             UA_QUALIFIEDNAME(1, name),
                             motorControllerTypeId, /* this refers to the object type
                                            identifier */
-                            oAttr, NULL, NULL);
+                            oAttr, fd, NULL);
+		addSportSendMsgMethod(server, nodeId);			/* add method to object instance */
 }
 
 static UA_StatusCode

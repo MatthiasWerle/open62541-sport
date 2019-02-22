@@ -21,16 +21,14 @@ set_interface_attribs(int fd, int speed)
 
     if (tcgetattr(fd, &tty) < 0) {
         printf("Error from tcgetattr: %s\n", strerror(errno));
-        //return -1;
         return UA_STATUSCODE_BADUNEXPECTEDERROR;
     }
 
 	cfsetospeed(&tty, (speed_t)speed);
 	cfsetispeed(&tty, (speed_t)speed);
-
 	/* set baud rates to 19200 */
-//	cfsetospeed(&tty, B19200);
-//	cfsetispeed(&tty, B19200);
+//	cfsetospeed(&tty, B115200);
+//	cfsetispeed(&tty, B115200);
 
     tty.c_cflag |= (unsigned int)(CLOCAL | CREAD);    /* ignore modem controls */
     tty.c_cflag &= ~(unsigned int)CSIZE;
@@ -52,10 +50,8 @@ set_interface_attribs(int fd, int speed)
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
         printf("Error from tcsetattr: %s\n", strerror(errno));
         return UA_STATUSCODE_BADUNEXPECTEDERROR;
-		// return -1;
     }
     return UA_STATUSCODE_GOOD;
-	// return 0
 }
 
 static void
@@ -76,18 +72,32 @@ set_blocking (int fd, int should_block)
                 printf ("error %d setting term attributes", errno);
 }
 
-/* callable only by server */
-//static int 
-//sport_send_msg(char msg[], int fd)
-//{
-//    int wlen = (int)write(fd, msg, strlen(msg)); /* number of bytes written */
-//    if (wlen != (int)strlen(msg)) {
-//        printf("Error from write: %d, %d\n", wlen, errno);
-//    }
-//    tcdrain(fd);    /* delay for output */
-//}
-//    return wlen;
+/* copied in this form */
+static int 
+sport_send_msg(char msg[], int fd)
+{
+    int wlen = (int)write(fd, msg, strlen(msg)); /* number of bytes written */
+    if (wlen != (int)strlen(msg)) {
+        printf("Error from write: %d, %d\n", wlen, errno);
+    }
+    tcdrain(fd);    /* delay for output */
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "sport_send_msg was called");
+    return wlen;
+}
 
+// TODO:
+//static UA_StatusCode
+//sport_write(UA_Int32 *fd, UA_String *msg)
+//{
+//	ssize_t wlen = write((int)*fd, (char*)msg->data, (size_t)msg->length);
+//	if (wlen != (ssize_t)msg->length) {
+//		printf("Error from write: %zu, %d\n", wlen, errno);
+//		return UA_STATUSCODE_BADUNEXPECTEDERROR;
+//	}
+//	return UA_STATUSCODE_GOOD
+//}
+
+// TODO: static UA_StatusCode sport_read(UA_Int32 fd, UA_String *msg)
 
 /* callable by server and client */
 static UA_StatusCode 
@@ -100,33 +110,41 @@ sportSendMsgMethodCallback(UA_Server *server,
 {
     UA_Int32 *inputInt = (UA_Int32*)input[0].data;	/* filedescriptor */
 	UA_String *inputStr = (UA_String*)input[1].data; /* message to be sent */
-	/* to check: inputInt.length udn inputStr.length */
 
+	int *fd = (int*)input[0].data;
+	char* msg1 = (char*)inputStr->data;
+	char* msg2 = "#1A\r";
+	strcat(msg1, "\r");
+	printf("fd = %d, msg1 = %s, msg2 = %s \n",*fd, msg1, msg2);
+	printf("strcmp(msg1,msg2) = %d \n", strcmp(msg1, msg2));
+	sport_send_msg(msg1, *fd);
 
 	/* debug stuff*/
 	printf("stuff to check: \n");
 	printf("(int)*inputInt = %d \n",(int)*inputInt);
 	printf("*(UA_Int32*)input[0].data = %d \n", *(UA_Int32*)input[0].data);
+	printf("(char*)input[1].data = %s \n", (char*)input[1].data);
+	printf("(char*)inputStr->data = %s \n", (char*)inputStr->data);
 	printf("inputStr length and data = %.*s \n", (int)inputStr->length, (char*)inputStr->data);
 
 	ssize_t wlen;
-    wlen = write((int)*inputInt, inputStr, inputStr->length); /* number of bytes written */
+    wlen = write((int)*inputInt, inputStr->data, inputStr->length); /* number of bytes written */
 	printf("wlen = %zu\n",wlen);
 	printf("inputStr->length = %zu\n", inputStr->length);
     if (wlen != (ssize_t)inputStr->length) {
         printf("Error from write: %zu, %d\n", wlen, errno);
+		return UA_STATUSCODE_BADUNEXPECTEDERROR;
     }
     tcdrain((int)*inputInt);    /* delay for output */
 	
-	/* read on port to check if acknowledgement was sent back */
-	
+	/* Todo: read on port to check if acknowledgement was sent back */
 	
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
     return UA_STATUSCODE_GOOD;
 }
 
 static void
-addSportSendMsgMethod(UA_Server *server){
+addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId){
 	UA_Argument inputArguments[2];
 	UA_Argument_init(&inputArguments[0]);
 	inputArguments[0].description = UA_LOCALIZEDTEXT("en-US", "an int, filepointer to serial port");
@@ -152,9 +170,11 @@ addSportSendMsgMethod(UA_Server *server){
 	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Send a message");
 	sendAttr.executable = true;
 	sendAttr.userExecutable = true;
-	UA_Server_addMethodNode(server, UA_NODEID_STRING(1, "SportSendMsg"),
+	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 
+//							UA_NODEID_STRING(1, "SportSendMsg"),
 //							UA_NODEID_STRING(1, "MCId1"),					/* motor controller 1 as parent */
-							UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), 	/* objectfolder as parent */
+//							UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), 	/* objectfolder as parent */
+							*objectNodeId,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
                             UA_QUALIFIEDNAME(1, "SportSendMsg"),
                             sendAttr, &sportSendMsgMethodCallback,
@@ -164,33 +184,33 @@ addSportSendMsgMethod(UA_Server *server){
 
 static char* sport_listen(char msg[], int fd)
 {
-	char msg_in[strlen(msg)-1];
+	char msg_in[strlen(msg)+50];
     do {
-        int rdlen;								/* number of bytes read */
+        int rdlen = 0;								/* number of bytes read */
 		char buf[80];
-		
-		printf("fyi before read\n");
+		printf("fyi sizeof(buf): %d \n", sizeof(buf));
 //		fcntl(fd, F_SETFL, O_NDELAY); /* causes read function to return 0 if no characters available on port */
-        rdlen = (int)read(fd, buf, sizeof(buf) - 1);
-//		fcntl(fd, F_SETFL, 0); /* causes read function to restore normal blocking behaviour */
-
-		strncat(msg_in, buf, strlen(msg)-1); /* appends part of read input message from buffer to msg_in */
-//		printf("fyi msg_in = %s\n",&msg_in);
+        rdlen = (int)read(fd, buf, sizeof(buf));
+		//		fcntl(fd, F_SETFL, 0); /* causes read function to restore normal blocking behaviour */
+		printf("fyi rdlen: %i \n", rdlen);
+		printf("fyi buf: ");
+		int i;
+		for(i = 1 ; i == 80; i = i + 1) 
+		{
+			printf("%c", (char)buf[i]); 
+		}
+		printf("\n ... \n");
+		strncat(msg_in, buf, strlen(msg)+50); /* appends part of read input message from buffer to msg_in */
+		printf("fyi msg_in = %s\n",msg_in);
         if (rdlen > 0) {
-#ifdef DISPLAY_STRING
             buf[rdlen] = 0;
             printf("Read %d: \"%s\"\n", rdlen, buf);
-#else /* display hex */
-            unsigned char   *p;
-            printf("Read %d:", rdlen);
-            for (p = buf; rdlen-- > 0; p++)
-                printf(" 0x%x", *p);
-            printf("\n");
-			if (1 && strcmp(msg_in, msg+1)){
-				printf("Message accepted");
-				break
-			}
-#endif
+//			/* display hex */
+//			unsigned char   *p;
+//			printf("Read %d:", rdlen);
+//			for (p = buf; rdlen-- > 0; p++)
+//				printf(" 0x%x", *p);
+//			printf("\n");
         } else if (rdlen < 0) {
             printf("Error from read: %d: %s\n", rdlen, strerror(errno));
 			return strcat("Error from read", strerror(errno));
@@ -199,5 +219,6 @@ static char* sport_listen(char msg[], int fd)
 			return "Timeout from read\n";
         }
         /* repeat read to get full message */
+		return "0";
     } while (1);
 }
