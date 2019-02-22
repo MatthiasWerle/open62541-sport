@@ -15,8 +15,10 @@
 #include <stdint.h>
 
 #include "sport.h" 				/* serial port communication */
-#include "func.h"				/* helpful library eg. set/get nodeId or attributes */
+//#include "func.h"				/* helpful library eg. set/get nodeId or attributes */
 #include "nanotec_smci_etc.h"	/* command list for step motor controllers from nanotec */
+
+#define N 4 /* max. number of motor controllers */
 
 /******************/
 /* PROGRAMM START */
@@ -41,69 +43,85 @@ int main(int argc, char** argv)
     UA_Server *server = UA_Server_new(config);
 
 	/* declare global variables */
-	UA_String ttyname1 = UA_STRING("/dev/ttyUSB0");	
-	UA_String ttyname2 = UA_STRING("/dev/ttyUSB1");	
-	UA_String ttyname3 = UA_STRING("/dev/ttyUSB2");	
-	UA_String ttyname4 = UA_STRING("/dev/ttyUSB3");	
+	int i;										/* index for loops */
+	char name[40];
+	char namenr[12];
 
-	int fd1 = set_fd((char*)ttyname1.data);					/* file descriptor for serial port */
-	int fd2 = set_fd((char*)ttyname2.data);					/* file descriptor for serial port */
-	int fd3 = set_fd((char*)ttyname3.data);					/* file descriptor for serial port */
-	int fd4 = set_fd((char*)ttyname4.data);					/* file descriptor for serial port */
-
-	UA_Variant valVar;
-
-    /* set connection settings for serial port */
-    printf("fyi start setting interface attributes... \n");
-	set_interface_attribs(fd1, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
-	set_interface_attribs(fd2, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
-	set_interface_attribs(fd3, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
-	set_interface_attribs(fd4, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
-	set_blocking(fd1, 0);						/* set blocking for read off */
-	set_blocking(fd2, 0);						/* set blocking for read off */
-	set_blocking(fd3, 0);						/* set blocking for read off */
-	set_blocking(fd4, 0);						/* set blocking for read off */
-
+	UA_NodeId nodeIdMC[N];						/* Array of NodeId's for every Motor Controller Object Instance */
+	globalstructMC global[N];
+	globalstructMC *globalpointer[N];
+		global[0].ttyname = "/dev/ttyUSB0";
+		global[1].ttyname = "/dev/ttyUSB1";
+		global[2].ttyname = "/dev/ttyUSB2";
+		global[3].ttyname = "/dev/ttyUSB3";
+		global[0].motorAddr = 1;
+		global[1].motorAddr = 2;
+		global[2].motorAddr = 3;
+		global[3].motorAddr = 4;
+		
+	/* set global variables */
+	
 	/* Add nodeIds for object instances created later on */
-	UA_NodeId nodeIdMC1 = UA_NODEID_STRING(1,"MCId1");
-	UA_NodeId nodeIdMC2 = UA_NODEID_STRING(1,"MCId2");
-	UA_NodeId nodeIdMC3 = UA_NODEID_STRING(1,"MCId3");
-	UA_NodeId nodeIdMC4 = UA_NODEID_STRING(1,"MCId4");
+//	UA_NodeId nodeIdMC1 = UA_NODEID_STRING(1,"MCId1");
+//	UA_NodeId nodeIdMC2 = UA_NODEID_STRING(1,"MCId2");
+//	UA_NodeId nodeIdMC3 = UA_NODEID_STRING(1,"MCId3");
+//	UA_NodeId nodeIdMC4 = UA_NODEID_STRING(1,"MCId4");
+
+	for (i=0; i<N; i=i+1){
+	/* set attributes of array struct variable global */
+		global[i].fd = set_fd(global[i].ttyname);
+		printf("fyi Idx: %d; fd: %d for %s \n", i, global[i].fd, global[i].ttyname);
+	/* set array of pointers to array elements of struct variable global */
+		globalpointer[i] = (globalstructMC*)&(global[i]);
+		printf("fyi globalpointer[%d]->fd = %d \n", i, globalpointer[i]->fd);
+	/* declare NodeId's for every object instance of a motor controller */
+		strcpy(name, "MCId");
+		sprintf(namenr, "%d", i+1);
+		strcat(name, namenr);
+		printf("fyi name = %s \n", name);
+		nodeIdMC[i] = UA_NODEID_STRING(1,name);
+		printf("(char*)nodeIdMC[i].identifier.string.data = %s \n",(char*)nodeIdMC[i].identifier.string.data);
+	/* set connection settings for serial port */
+		set_interface_attribs(global[i].fd, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
+		set_blocking(global[i].fd, 0);						/* set blocking for read off */
+	}
+
+/* DONT KNOW WHY THIS IS NESSECARY */
+	nodeIdMC[0] = UA_NODEID_STRING(1,"MCId1");
+	nodeIdMC[1] = UA_NODEID_STRING(1,"MCId2");
+	nodeIdMC[2] = UA_NODEID_STRING(1,"MCId3");
+	nodeIdMC[3] = UA_NODEID_STRING(1,"MCId4");
+
 
 	/* Add Object Instances */
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "define object types and add object instances");
     defineObjectTypes(server);
 
-    addMotorControllerObjectInstance(server, "motorController1", &nodeIdMC1, &fd1);
-		UA_Variant_setScalar(&valVar, &ttyname1, &UA_TYPES[UA_TYPES_STRING]);
-		setChildAttrVal(server, &nodeIdMC1, "TTYname", valVar, UA_TYPES[UA_TYPES_STRING]);
+	for (i=0; i<N; i=i+1){
+		strcpy(name, "motorController");
+		sprintf(namenr, "%d", i+1);
+		strcat(name, namenr);		
+		printf("fyi name = %s \n", name);
+		addMotorControllerObjectInstance(server, name, &nodeIdMC[i], &global[i].fd);
+	}
 
+//		UA_NodeId testId = UA_NODEID_STRING(1,"MCId4");
+//		addMotorControllerObjectInstance(server, "motorController4", &testId, &global[3].fd);
 
-
-	addMotorControllerObjectInstance(server, "motorController2", &nodeIdMC2, &fd2);
-		UA_Variant_setScalar(&valVar, &ttyname2, &UA_TYPES[UA_TYPES_STRING]);
-		setChildAttrVal(server, &nodeIdMC2, "TTYname", valVar, UA_TYPES[UA_TYPES_STRING]);
-
+//    addMotorControllerObjectInstance(server, "motorController1", &nodeIdMC1, &global[0].fd);
+//	addMotorControllerObjectInstance(server, "motorController2", &nodeIdMC2, &global[1].fd);
 	addMotorControllerTypeConstructor(server);	/* need this? initializes lifecycle?! */
-	addMotorControllerObjectInstance(server, "motorController3", &nodeIdMC3, &fd3);
-	addMotorControllerObjectInstance(server, "motorController4", &nodeIdMC4, &fd4);
+//	addMotorControllerObjectInstance(server, "motorController3", &nodeIdMC3, &global[2].fd);
+//	addMotorControllerObjectInstance(server, "motorController4", &nodeIdMC4, &global[3].fd);
 
 
 	/* DEBUG Test Variables */
 	char* msg = "#*A\r"; 	/* test command, Motor starten */
+	msg = "#1v\r";
 
 	/* DEBUG EXTRA INFO */
-	printf(" ttyname1: %s \n fd1: %d \n", (char*)ttyname1.data, fd1);
-	printf(" ttyname1: %s \n fd2: %d \n", (char*)ttyname2.data, fd2);
-	printf(" ttyname1: %s \n fd3: %d \n", (char*)ttyname3.data, fd3);
-	printf(" ttyname1: %s \n fd4: %d \n", (char*)ttyname4.data, fd4);
 	printf("msg = %s\n",msg);
 
-	/* DEBUG TESTING SITE: GET NODEID*/
-	UA_NodeId nodeIdMC3tty;
-	nodeIdMC3tty.identifierType = UA_NODEIDTYPE_NUMERIC;
-	getChildNodeId(server, &nodeIdMC3, "TTYname", &nodeIdMC3tty);
-	printf("child nodeId tty MC3: %u \n", nodeIdMC3tty.identifier.numeric);
 
 	/* Adding Methods */
 //	printf("fyi adding methods ... \n");
@@ -111,27 +129,12 @@ int main(int argc, char** argv)
 
     /* simple output on serial port */
 	printf("fyi start sending a message... \n");
-    sport_send_msg(msg, fd1);
+    sport_send_msg(msg, global[0].fd);
 
     /* simple noncanonical input */
 	printf("fyi start to listen... \n");
-	sport_listen(msg, fd1);
+	sport_listen(msg, global[0].fd);
 	printf("fyi end of listening... \n");
-
-	/* TESTING SITE DATATYPES */
-	UA_String teststring;
-	teststring = UA_STRING("#Important Message");
-	printf("teststring.data = %s\n", teststring.data);
-	printf("teststring.length = %zu\n", teststring.length);
-	printf("strlen((char*)teststring.data) = %zu\n", strlen((char*) teststring.data));
-	teststring.data += 1; printf("teststring.data +=1;\n");
-	printf("teststring.data = %s\n", teststring.data);
-	printf("teststring.length = %zu\n", teststring.length);
-	printf("strlen((char*)teststring.data) = %zu\n", strlen((char*) teststring.data));
-	printf("sizeof(teststring.length) = %zu \n", sizeof(teststring.length));
-	int testint = 5;
-	printf("testint = 5\n");
-	printf("sizeof(testint) = %zu \n", sizeof(testint));
 
 	/* WIP changing object properties, yet not working */
 	UA_Variant fdId;

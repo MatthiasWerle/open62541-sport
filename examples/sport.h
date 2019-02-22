@@ -111,6 +111,9 @@ sportSendMsgMethodCallback(UA_Server *server,
     UA_Int32 *inputInt = (UA_Int32*)input[0].data;	/* filedescriptor */
 	UA_String *inputStr = (UA_String*)input[1].data; /* message to be sent */
 
+	int *fd1 = (int*)objectContext;
+	printf("weitergereichter fd: %d \n", *fd1);
+
 	int *fd = (int*)input[0].data;
 	char* msg1 = (char*)inputStr->data;
 	char* msg2 = "#1A\r";
@@ -144,7 +147,7 @@ sportSendMsgMethodCallback(UA_Server *server,
 }
 
 static void
-addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId){
+addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, int *fd){
 	UA_Argument inputArguments[2];
 	UA_Argument_init(&inputArguments[0]);
 	inputArguments[0].description = UA_LOCALIZEDTEXT("en-US", "an int, filepointer to serial port");
@@ -178,8 +181,40 @@ addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId){
                             UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
                             UA_QUALIFIEDNAME(1, "SportSendMsg"),
                             sendAttr, &sportSendMsgMethodCallback,
-                            2, inputArguments, 1, &outputArgument, NULL, NULL);
+                            2, inputArguments, 1, &outputArgument, (void*)fd, NULL);
 }
+
+static UA_StatusCode 
+startMotorMethodCallback(UA_Server *server,
+                         const UA_NodeId *sessionId, void *sessionHandle,
+                         const UA_NodeId *methodId, void *methodContext,
+                         const UA_NodeId *objectId, void *objectContext,
+						 size_t inputSize, const UA_Variant *input,
+                         size_t outputSize, UA_Variant *output)
+{
+	int *fd = (int*)objectContext;
+	char* msg = "#1A\r";
+	sport_send_msg(msg, *fd);
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
+    return UA_STATUSCODE_GOOD;
+}
+
+static void
+addStartMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, int *fd){
+	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
+	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Start Motor with current set");
+	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Start Motor");
+	sendAttr.executable = true;
+	sendAttr.userExecutable = true;
+	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 *objectNodeId,
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
+                            UA_QUALIFIEDNAME(1, "SportSendMsg"),
+                            sendAttr, &startMotorMethodCallback,
+                            0, NULL, 0, NULL, (void*)fd, NULL);
+}
+
+
+
 
 
 static char* sport_listen(char msg[], int fd)

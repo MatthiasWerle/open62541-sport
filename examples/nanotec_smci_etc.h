@@ -5,6 +5,12 @@
 /* Add Motor Controller Object Instances */
 /*****************************************/
 
+	typedef struct {
+		char* ttyname;
+		int fd;
+		int motorAddr;
+	} globalstructMC;
+
 /* predefined identifier for later use */
 UA_NodeId motorControllerTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1001}};
 
@@ -106,20 +112,20 @@ defineObjectTypes(UA_Server *server) {
                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
                            UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 
-	/* ttyname */
-    UA_VariableAttributes ttynameAttr = UA_VariableAttributes_default;
-    ttynameAttr.displayName = UA_LOCALIZEDTEXT("en-US", "TTYname");
-    ttynameAttr.valueRank = UA_VALUERANK_SCALAR;
-	ttynameAttr.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-    ttynameAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-    UA_Variant_setScalar(&ttynameAttr.value, &defStr, &UA_TYPES[UA_TYPES_STRING]);
-	UA_NodeId ttynameId;
+	/* Motor Controller Index */
+    UA_VariableAttributes motorControllerIdxAttr = UA_VariableAttributes_default;
+    motorControllerIdxAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Motor Controller Index");
+    motorControllerIdxAttr.valueRank = UA_VALUERANK_SCALAR;
+	motorControllerIdxAttr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
+    motorControllerIdxAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
+    UA_Variant_setScalar(&motorControllerIdxAttr.value, &defStr, &UA_TYPES[UA_TYPES_INT32]);
+	UA_NodeId motorControllerIdxId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "TTYname"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), ttynameAttr, NULL, &ttynameId);
-    /* Make the ttyname variable mandatory */
-    UA_Server_addReference(server, ttynameId,
+                              UA_QUALIFIEDNAME(1, "MotorControllerIndex"),
+                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), motorControllerIdxAttr, NULL, &motorControllerIdxId);
+    /* Make the motorControllerIdx variable mandatory */
+    UA_Server_addReference(server, motorControllerIdxId,
                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
                            UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 
@@ -169,10 +175,10 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
                             UA_QUALIFIEDNAME(1, name),
-                            motorControllerTypeId, /* this refers to the object type
-                                           identifier */
+                            motorControllerTypeId, /* this refers to the object type identifier */
                             oAttr, fd, NULL);
-		addSportSendMsgMethod(server, nodeId);			/* add method to object instance */
+		addSportSendMsgMethod(server, nodeId, fd);			/* add method to object instance */
+		addStartMotorMethod(server, nodeId, fd);
 }
 
 static UA_StatusCode
