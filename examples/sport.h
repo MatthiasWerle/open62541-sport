@@ -20,7 +20,8 @@ set_interface_attribs(int fd, int speed)
     struct termios tty;
 
     if (tcgetattr(fd, &tty) < 0) {
-        printf("Error from tcgetattr: %s\n", strerror(errno));
+//		printf("Error from tcgetattr: %s\n", strerror(errno));
+		printf("Error %d from tcgetattr: %s\n", errno, strerror(errno));
         return UA_STATUSCODE_BADUNEXPECTEDERROR;
     }
 
@@ -61,7 +62,8 @@ set_blocking (int fd, int should_block)
         memset (&tty, 0, sizeof tty);
         if (tcgetattr (fd, &tty) != 0)
         {
-                printf ("error %d from tggetattr", errno);
+//				printf ("error %d from tggetattr \n", errno);
+				printf("Error %d from tcgetattr: %s\n", errno, strerror(errno));
                 return;
         }
 
@@ -69,7 +71,7 @@ set_blocking (int fd, int should_block)
         tty.c_cc[VTIME] = 10;            // 1 second read timeout
 
         if (tcsetattr (fd, TCSANOW, &tty) != 0)
-                printf ("error %d setting term attributes", errno);
+                printf ("error %d setting term attributes \n", errno);
 }
 
 /* copied in this form */

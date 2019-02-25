@@ -44,8 +44,12 @@ int main(int argc, char** argv)
 
 	/* declare global variables */
 	int i;										/* index for loops */
-	char name[40];
-	char namenr[12];
+	char **nameid = NULL;
+	char **namebrowse = NULL;
+	char **namenr = NULL;
+	nameid = (char**)malloc(sizeof(**nameid)*N);
+	namebrowse = (char**)malloc(sizeof(**nameid)*N);
+	namenr = (char**)malloc(sizeof(**nameid)*N);
 
 	UA_NodeId nodeIdMC[N];						/* Array of NodeId's for every Motor Controller Object Instance */
 	globalstructMC global[N];
@@ -75,11 +79,13 @@ int main(int argc, char** argv)
 		globalpointer[i] = (globalstructMC*)&(global[i]);
 		printf("fyi globalpointer[%d]->fd = %d \n", i, globalpointer[i]->fd);
 	/* declare NodeId's for every object instance of a motor controller */
-		strcpy(name, "MCId");
-		sprintf(namenr, "%d", i+1);
-		strcat(name, namenr);
-		printf("fyi name = %s \n", name);
-		nodeIdMC[i] = UA_NODEID_STRING(1,name);
+		nameid[i] = (char*)malloc(sizeof(char*) * 10);
+		namenr[i] = (char*)malloc(sizeof(char*) * 10);
+		strcpy(*(nameid+i), "MCId");
+		sprintf(*(namenr+i), "%d", i+1);
+		strcat(*(nameid+i), *(namenr+i));
+		printf("fyi *(nameid+1) = %s \n", *(nameid+i));
+		nodeIdMC[i] = UA_NODEID_STRING(1,*(nameid+i));
 		printf("(char*)nodeIdMC[i].identifier.string.data = %s \n",(char*)nodeIdMC[i].identifier.string.data);
 	/* set connection settings for serial port */
 		set_interface_attribs(global[i].fd, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
@@ -87,10 +93,14 @@ int main(int argc, char** argv)
 	}
 
 /* DONT KNOW WHY THIS IS NESSECARY */
-	nodeIdMC[0] = UA_NODEID_STRING(1,"MCId1");
-	nodeIdMC[1] = UA_NODEID_STRING(1,"MCId2");
-	nodeIdMC[2] = UA_NODEID_STRING(1,"MCId3");
-	nodeIdMC[3] = UA_NODEID_STRING(1,"MCId4");
+//	nodeIdMC[0] = UA_NODEID_STRING(1,"MCId1");
+//	nodeIdMC[1] = UA_NODEID_STRING(1,"MCId2");
+//	nodeIdMC[2] = UA_NODEID_STRING(1,"MCId3");
+//	nodeIdMC[3] = UA_NODEID_STRING(1,"MCId4");
+		printf("(char*)nodeIdMC[0].identifier.string.data = %s \n",(char*)nodeIdMC[0].identifier.string.data);
+		printf("(char*)nodeIdMC[1].identifier.string.data = %s \n",(char*)nodeIdMC[1].identifier.string.data);
+		printf("(char*)nodeIdMC[2].identifier.string.data = %s \n",(char*)nodeIdMC[2].identifier.string.data);
+		printf("(char*)nodeIdMC[3].identifier.string.data = %s \n",(char*)nodeIdMC[3].identifier.string.data);
 
 
 	/* Add Object Instances */
@@ -98,12 +108,18 @@ int main(int argc, char** argv)
     defineObjectTypes(server);
 
 	for (i=0; i<N; i=i+1){
-		strcpy(name, "motorController");
-		sprintf(namenr, "%d", i+1);
-		strcat(name, namenr);		
-		printf("fyi name = %s \n", name);
-		addMotorControllerObjectInstance(server, name, &nodeIdMC[i], &global[i].fd);
+		namebrowse[i] = (char*)malloc(sizeof(char*) * 50);
+		strcpy(*(namebrowse+i), "motorController");
+		sprintf(*(namenr+i), "%d", i+1);
+		strcat(*(namebrowse+i), *(namenr+i));		
+		printf("fyi *(namebrowse+i) = %s \n", *(namebrowse+i));
+		printf("(char*)nodeIdMC[i].identifier.string.data = %s \n",(char*)nodeIdMC[i].identifier.string.data);
+		addMotorControllerObjectInstance(server, *(namebrowse+i), &nodeIdMC[i], &global[i].fd);
 	}
+//		addMotorControllerObjectInstance(server, *(namebrowse+0), &nodeIdMC[0], &global[0].fd);
+//		addMotorControllerObjectInstance(server, *(namebrowse+1), &nodeIdMC[1], &global[1].fd);
+//		addMotorControllerObjectInstance(server, *(namebrowse+2), &nodeIdMC[2], &global[2].fd);
+//		addMotorControllerObjectInstance(server, *(namebrowse+3), &nodeIdMC[3], &global[3].fd);
 
 //		UA_NodeId testId = UA_NODEID_STRING(1,"MCId4");
 //		addMotorControllerObjectInstance(server, "motorController4", &testId, &global[3].fd);
