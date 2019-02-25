@@ -13,12 +13,33 @@
 
 #include <string.h>
 #include <stdint.h>
+#include <time.h>				/* clock() function */
+
+//#include "func.h"				/* helpful library eg. set/get nodeId or attributes */
+
+	typedef struct {
+		char* ttyname;
+		int fd;
+		int motorAddr;
+	} globalstructMC;
 
 #include "sport.h" 				/* serial port communication */
-//#include "func.h"				/* helpful library eg. set/get nodeId or attributes */
 #include "nanotec_smci_etc.h"	/* command list for step motor controllers from nanotec */
 
+/*********************/
+/* GLOBAL PARAMETERS */
+/*********************/
 #define N 4 /* max. number of motor controllers */
+
+static void delay(int milli_seconds) 
+{ 
+    // Stroing start time 
+    clock_t start_time = clock(); 
+  
+    // looping till required time is not acheived 
+    while (clock() < start_time + milli_seconds*1000) 
+        ; 
+} 
 
 /******************/
 /* PROGRAMM START */
@@ -59,21 +80,15 @@ int main(int argc, char** argv)
 		global[2].ttyname = "/dev/ttyUSB2";
 		global[3].ttyname = "/dev/ttyUSB3";
 		global[0].motorAddr = 1;
-		global[1].motorAddr = 2;
+		global[1].motorAddr = 1;
 		global[2].motorAddr = 3;
 		global[3].motorAddr = 4;
 		
 	/* set global variables */
-	
-	/* Add nodeIds for object instances created later on */
-//	UA_NodeId nodeIdMC1 = UA_NODEID_STRING(1,"MCId1");
-//	UA_NodeId nodeIdMC2 = UA_NODEID_STRING(1,"MCId2");
-//	UA_NodeId nodeIdMC3 = UA_NODEID_STRING(1,"MCId3");
-//	UA_NodeId nodeIdMC4 = UA_NODEID_STRING(1,"MCId4");
-
 	for (i=0; i<N; i=i+1){
 	/* set attributes of array struct variable global */
 		global[i].fd = set_fd(global[i].ttyname);
+		global[i].fd = 3; 																		/* DEBUG muss später weg */
 		printf("fyi Idx: %d; fd: %d for %s \n", i, global[i].fd, global[i].ttyname);
 	/* set array of pointers to array elements of struct variable global */
 		globalpointer[i] = (globalstructMC*)&(global[i]);
@@ -103,24 +118,39 @@ int main(int argc, char** argv)
 		strcat(*(namebrowse+i), *(namenr+i));		
 		printf("fyi *(namebrowse+i) = %s \n", *(namebrowse+i));
 		printf("(char*)nodeIdMC[i].identifier.string.data = %s \n",(char*)nodeIdMC[i].identifier.string.data);
-		addMotorControllerObjectInstance(server, *(namebrowse+i), &nodeIdMC[i], &global[i].fd);
+		addMotorControllerObjectInstance(server, *(namebrowse+i), &nodeIdMC[i], &global[i]);
 	}
 
-	/* DEBUG Test Variables */
-	char* msg = "#*A\r"; 	/* test command, Motor starten */
-	msg = "#1v\r";
 
-	/* DEBUG EXTRA INFO */
-	printf("msg = %s\n",msg);
+
+
 
 	/* Adding Methods */
 //	printf("fyi adding methods ... \n");
 //	addSportSendMsgMethod(server);
 
-    /* simple output on serial port */
-	printf("fyi start sending a message... \n");
-    sport_send_msg(msg, global[0].fd);
 
+	/* DEBUG Test Variables */
+	char msg[] = "#*A\r"; 	/* test command, Motor starten */
+	printf("sending msg = %s\n ... \n",msg);
+	sport_send_msg(msg, global[0].fd);
+	delay(3000);
+	strcpy(msg, "#*s-40000\r");
+	printf("sending msg = %s\n ... \n",msg);
+    sport_send_msg(msg, global[0].fd);
+	delay(3000);
+	strcpy(msg, "#*A\r");
+	printf("sending msg = %s\n ... \n",msg);
+    sport_send_msg(msg, global[0].fd);
+	delay(3000);
+	strcpy(msg, "#*s40001\r");
+	printf("sending msg = %s\n ... \n",msg);
+    sport_send_msg(msg, global[0].fd);
+	delay(3000);
+	strcpy(msg, "#*A\r");
+	printf("sending msg = %s\n ... \n",msg);
+    sport_send_msg(msg, global[0].fd);
+	
     /* simple noncanonical input */
 	printf("fyi start to listen... \n");
 	sport_listen(msg, global[0].fd);

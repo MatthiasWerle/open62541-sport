@@ -76,7 +76,7 @@ set_blocking (int fd, int should_block)
 
 /* copied in this form */
 static int 
-sport_send_msg(char msg[], int fd)
+sport_send_msg(char* msg, int fd)
 {
     int wlen = (int)write(fd, msg, strlen(msg)); /* number of bytes written */
     if (wlen != (int)strlen(msg)) {
@@ -113,24 +113,25 @@ sportSendMsgMethodCallback(UA_Server *server,
     UA_Int32 *inputInt = (UA_Int32*)input[0].data;	/* filedescriptor */
 	UA_String *inputStr = (UA_String*)input[1].data; /* message to be sent */
 
-	int *fd1 = (int*)objectContext;
-	printf("weitergereichter fd: %d \n", *fd1);
+	globalstructMC *global = (globalstructMC*)objectContext;
+	printf("weitergereichter file descriptor global->fd = %d \n", global->fd);
+	char msg[] = "#"; 													/* write start sign # to message */
+	char motorAddr[3];
+	sprintf(motorAddr,"%d",global->motorAddr);
+	strcat(msg, motorAddr);												/* append motor adress to message */
+	char* cmd = (char*)inputStr->data;
+	strcat(msg, cmd);													/* append command to message */
+	strcat(msg, "\r");													/* append end sign to message */
+	sport_send_msg(msg, global->fd);									/* send message */
 
-	int *fd = (int*)input[0].data;
-	char* msg1 = (char*)inputStr->data;
-	char* msg2 = "#1A\r";
-	strcat(msg1, "\r");
-	printf("fd = %d, msg1 = %s, msg2 = %s \n",*fd, msg1, msg2);
-	printf("strcmp(msg1,msg2) = %d \n", strcmp(msg1, msg2));
-	sport_send_msg(msg1, *fd);
 
 	/* debug stuff*/
-	printf("stuff to check: \n");
-	printf("(int)*inputInt = %d \n",(int)*inputInt);
-	printf("*(UA_Int32*)input[0].data = %d \n", *(UA_Int32*)input[0].data);
-	printf("(char*)input[1].data = %s \n", (char*)input[1].data);
-	printf("(char*)inputStr->data = %s \n", (char*)inputStr->data);
-	printf("inputStr length and data = %.*s \n", (int)inputStr->length, (char*)inputStr->data);
+//	printf("stuff to check: \n");
+//	printf("(int)*inputInt = %d \n",(int)*inputInt);
+//	printf("*(UA_Int32*)input[0].data = %d \n", *(UA_Int32*)input[0].data);
+//	printf("(char*)input[1].data = %s \n", (char*)input[1].data);
+//	printf("(char*)inputStr->data = %s \n", (char*)inputStr->data);
+//	printf("inputStr length and data = %.*s \n", (int)inputStr->length, (char*)inputStr->data);
 
 	ssize_t wlen;
     wlen = write((int)*inputInt, inputStr->data, inputStr->length); /* number of bytes written */
@@ -149,17 +150,17 @@ sportSendMsgMethodCallback(UA_Server *server,
 }
 
 static void
-addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, int *fd){
+addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
 	UA_Argument inputArguments[2];
 	UA_Argument_init(&inputArguments[0]);
-	inputArguments[0].description = UA_LOCALIZEDTEXT("en-US", "an int, filepointer to serial port");
-	inputArguments[0].name = UA_STRING("FD");
+	inputArguments[0].description = UA_LOCALIZEDTEXT("en-US", "old, unused argument");
+	inputArguments[0].name = UA_STRING("unusedArgument");
 	inputArguments[0].dataType = UA_TYPES[UA_TYPES_INT32].typeId;
 	inputArguments[0].valueRank = UA_VALUERANK_SCALAR; /* what is this? */
 	
 	UA_Argument_init(&inputArguments[1]);
-	inputArguments[1].description = UA_LOCALIZEDTEXT("en-US", "A string, message to be sent");
-	inputArguments[1].name = UA_STRING("InputMessage");
+	inputArguments[1].description = UA_LOCALIZEDTEXT("en-US", "A string, command e.g. \"A\" or \"J1\" or \"J0\"");
+	inputArguments[1].name = UA_STRING("InputCommand");
 	inputArguments[1].dataType = UA_TYPES[UA_TYPES_STRING].typeId;
 	inputArguments[1].valueRank = UA_VALUERANK_SCALAR; /* what is this? */
 	
@@ -183,8 +184,31 @@ addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, int *fd)
                             UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
                             UA_QUALIFIEDNAME(1, "SportSendMsg"),
                             sendAttr, &sportSendMsgMethodCallback,
-                            2, inputArguments, 1, &outputArgument, (void*)fd, NULL);
+                            2, inputArguments, 1, &outputArgument, (void*)global, NULL);
 }
+
+static void
+MCcommand(const int motorAddr, const char* cmd, const int* valPtr, char* msg)
+{
+	memset(msg,0,strlen(msg));											/* empty message */
+	char motorAddrStr[3];
+	sprintf(motorAddrStr, "%d", motorAddr);
+	char valStr[15];
+	memset(valStr,0,strlen(valStr));											/* empty message */
+	if (valPtr != NULL){
+		printf("*valPtr = %d \n", *valPtr);
+		printf("before sprintf valStr = %s\n", valStr);
+		sprintf(valStr, "%d", *valPtr);
+		printf("after sprintf valStr = %s\n", valStr);
+	}
+	printf("after sprintf \n");
+	strcpy(msg,"#"); 													/* write start sign # to message */
+	strcat(msg, motorAddrStr);											/* append motor adress to message */
+	strcat(msg, cmd);													/* append command to message */
+	strcat(msg, valStr);												/* append value to message */
+	strcat(msg, "\r");													/* append end sign to message */
+}
+
 
 static UA_StatusCode 
 startMotorMethodCallback(UA_Server *server,
@@ -194,15 +218,20 @@ startMotorMethodCallback(UA_Server *server,
 						 size_t inputSize, const UA_Variant *input,
                          size_t outputSize, UA_Variant *output)
 {
-	int *fd = (int*)objectContext;
-	char* msg = "#1A\r";
-	sport_send_msg(msg, *fd);
+	globalstructMC *global = (globalstructMC*)objectContext;
+	
+//	char* msg = NULL;
+	char msg[] = "test";
+	memset(msg,0,strlen(msg));											/* empty message */
+	MCcommand(1, "A", NULL, msg);
+	printf("fyi start motor msg = %s \n", msg);
+	sport_send_msg(msg, global->fd);									/* send message */
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
     return UA_STATUSCODE_GOOD;
 }
 
 static void
-addStartMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, int *fd){
+addStartMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
 	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
 	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Start Motor with current set");
 	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Start Motor");
@@ -212,7 +241,7 @@ addStartMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, int *fd){
                             UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
                             UA_QUALIFIEDNAME(1, "SportSendMsg"),
                             sendAttr, &startMotorMethodCallback,
-                            0, NULL, 0, NULL, (void*)fd, NULL);
+                            0, NULL, 0, NULL, (void*)global, NULL);
 }
 
 

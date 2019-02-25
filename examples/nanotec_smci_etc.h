@@ -1,15 +1,10 @@
 #define DISPLAY_STRING
 
 
+
 /*****************************************/
 /* Add Motor Controller Object Instances */
 /*****************************************/
-
-	typedef struct {
-		char* ttyname;
-		int fd;
-		int motorAddr;
-	} globalstructMC;
 
 /* predefined identifier for later use */
 UA_NodeId motorControllerTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1001}};
@@ -165,20 +160,20 @@ defineObjectTypes(UA_Server *server) {
 }
 
 static void
-addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId, int *fd) 
+addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId, globalstructMC *global) 
 {
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
     oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
 //    oAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-	printf("this is argument *fd: %d \n", *fd);
+	printf("this is argument global->fd: %d \n", global->fd);
     UA_Server_addObjectNode(server, *nodeId,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
                             UA_QUALIFIEDNAME(1, name),
                             motorControllerTypeId, /* this refers to the object type identifier */
-                            oAttr, fd, NULL);
-		addSportSendMsgMethod(server, nodeId, fd);			/* add method to object instance */
-		addStartMotorMethod(server, nodeId, fd);
+                            oAttr, global, NULL);
+		addSportSendMsgMethod(server, nodeId, global);			/* add method to object instance */
+		addStartMotorMethod(server, nodeId, global);
 }
 
 static UA_StatusCode
