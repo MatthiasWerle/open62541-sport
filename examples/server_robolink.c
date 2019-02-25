@@ -92,21 +92,10 @@ int main(int argc, char** argv)
 		set_blocking(global[i].fd, 0);						/* set blocking for read off */
 	}
 
-/* DONT KNOW WHY THIS IS NESSECARY */
-//	nodeIdMC[0] = UA_NODEID_STRING(1,"MCId1");
-//	nodeIdMC[1] = UA_NODEID_STRING(1,"MCId2");
-//	nodeIdMC[2] = UA_NODEID_STRING(1,"MCId3");
-//	nodeIdMC[3] = UA_NODEID_STRING(1,"MCId4");
-		printf("(char*)nodeIdMC[0].identifier.string.data = %s \n",(char*)nodeIdMC[0].identifier.string.data);
-		printf("(char*)nodeIdMC[1].identifier.string.data = %s \n",(char*)nodeIdMC[1].identifier.string.data);
-		printf("(char*)nodeIdMC[2].identifier.string.data = %s \n",(char*)nodeIdMC[2].identifier.string.data);
-		printf("(char*)nodeIdMC[3].identifier.string.data = %s \n",(char*)nodeIdMC[3].identifier.string.data);
-
-
 	/* Add Object Instances */
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "define object types and add object instances");
     defineObjectTypes(server);
-
+	addMotorControllerTypeConstructor(server);	/* need this? initializes lifecycle?! */
 	for (i=0; i<N; i=i+1){
 		namebrowse[i] = (char*)malloc(sizeof(char*) * 50);
 		strcpy(*(namebrowse+i), "motorController");
@@ -116,20 +105,6 @@ int main(int argc, char** argv)
 		printf("(char*)nodeIdMC[i].identifier.string.data = %s \n",(char*)nodeIdMC[i].identifier.string.data);
 		addMotorControllerObjectInstance(server, *(namebrowse+i), &nodeIdMC[i], &global[i].fd);
 	}
-//		addMotorControllerObjectInstance(server, *(namebrowse+0), &nodeIdMC[0], &global[0].fd);
-//		addMotorControllerObjectInstance(server, *(namebrowse+1), &nodeIdMC[1], &global[1].fd);
-//		addMotorControllerObjectInstance(server, *(namebrowse+2), &nodeIdMC[2], &global[2].fd);
-//		addMotorControllerObjectInstance(server, *(namebrowse+3), &nodeIdMC[3], &global[3].fd);
-
-//		UA_NodeId testId = UA_NODEID_STRING(1,"MCId4");
-//		addMotorControllerObjectInstance(server, "motorController4", &testId, &global[3].fd);
-
-//    addMotorControllerObjectInstance(server, "motorController1", &nodeIdMC1, &global[0].fd);
-//	addMotorControllerObjectInstance(server, "motorController2", &nodeIdMC2, &global[1].fd);
-	addMotorControllerTypeConstructor(server);	/* need this? initializes lifecycle?! */
-//	addMotorControllerObjectInstance(server, "motorController3", &nodeIdMC3, &global[2].fd);
-//	addMotorControllerObjectInstance(server, "motorController4", &nodeIdMC4, &global[3].fd);
-
 
 	/* DEBUG Test Variables */
 	char* msg = "#*A\r"; 	/* test command, Motor starten */
@@ -137,7 +112,6 @@ int main(int argc, char** argv)
 
 	/* DEBUG EXTRA INFO */
 	printf("msg = %s\n",msg);
-
 
 	/* Adding Methods */
 //	printf("fyi adding methods ... \n");
