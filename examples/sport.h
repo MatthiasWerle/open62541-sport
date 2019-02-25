@@ -80,24 +80,12 @@ sport_send_msg(char* msg, int fd)
 {
     int wlen = (int)write(fd, msg, strlen(msg)); /* number of bytes written */
     if (wlen != (int)strlen(msg)) {
-        printf("Error from write: %d, %d\n", wlen, errno);
+        printf("Error %d from write: %s \n wlen= %d\n", errno, strerror(errno), wlen);
     }
     tcdrain(fd);    /* delay for output */
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "sport_send_msg was called");
     return wlen;
 }
-
-// TODO:
-//static UA_StatusCode
-//sport_write(UA_Int32 *fd, UA_String *msg)
-//{
-//	ssize_t wlen = write((int)*fd, (char*)msg->data, (size_t)msg->length);
-//	if (wlen != (ssize_t)msg->length) {
-//		printf("Error from write: %zu, %d\n", wlen, errno);
-//		return UA_STATUSCODE_BADUNEXPECTEDERROR;
-//	}
-//	return UA_STATUSCODE_GOOD
-//}
 
 // TODO: static UA_StatusCode sport_read(UA_Int32 fd, UA_String *msg)
 
@@ -110,11 +98,10 @@ sportSendMsgMethodCallback(UA_Server *server,
 						 size_t inputSize, const UA_Variant *input,
                          size_t outputSize, UA_Variant *output)
 {
-    UA_Int32 *inputInt = (UA_Int32*)input[0].data;	/* filedescriptor */
-	UA_String *inputStr = (UA_String*)input[1].data; /* message to be sent */
-
+	/* initial declerations */
 	globalstructMC *global = (globalstructMC*)objectContext;
-	printf("weitergereichter file descriptor global->fd = %d \n", global->fd);
+	UA_String *inputStr = (UA_String*)input->data; 						/* message to be sent */
+	/* create message */ 
 	char msg[] = "#"; 													/* write start sign # to message */
 	char motorAddr[3];
 	sprintf(motorAddr,"%d",global->motorAddr);
@@ -122,27 +109,9 @@ sportSendMsgMethodCallback(UA_Server *server,
 	char* cmd = (char*)inputStr->data;
 	strcat(msg, cmd);													/* append command to message */
 	strcat(msg, "\r");													/* append end sign to message */
-	sport_send_msg(msg, global->fd);									/* send message */
+	/* send message */
+	sport_send_msg(msg, global->fd);
 
-
-	/* debug stuff*/
-//	printf("stuff to check: \n");
-//	printf("(int)*inputInt = %d \n",(int)*inputInt);
-//	printf("*(UA_Int32*)input[0].data = %d \n", *(UA_Int32*)input[0].data);
-//	printf("(char*)input[1].data = %s \n", (char*)input[1].data);
-//	printf("(char*)inputStr->data = %s \n", (char*)inputStr->data);
-//	printf("inputStr length and data = %.*s \n", (int)inputStr->length, (char*)inputStr->data);
-
-	ssize_t wlen;
-    wlen = write((int)*inputInt, inputStr->data, inputStr->length); /* number of bytes written */
-	printf("wlen = %zu\n",wlen);
-	printf("inputStr->length = %zu\n", inputStr->length);
-    if (wlen != (ssize_t)inputStr->length) {
-        printf("Error from write: %zu, %d\n", wlen, errno);
-		return UA_STATUSCODE_BADUNEXPECTEDERROR;
-    }
-    tcdrain((int)*inputInt);    /* delay for output */
-	
 	/* Todo: read on port to check if acknowledgement was sent back */
 	
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
@@ -151,18 +120,12 @@ sportSendMsgMethodCallback(UA_Server *server,
 
 static void
 addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
-	UA_Argument inputArguments[2];
-	UA_Argument_init(&inputArguments[0]);
-	inputArguments[0].description = UA_LOCALIZEDTEXT("en-US", "old, unused argument");
-	inputArguments[0].name = UA_STRING("unusedArgument");
-	inputArguments[0].dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-	inputArguments[0].valueRank = UA_VALUERANK_SCALAR; /* what is this? */
-	
-	UA_Argument_init(&inputArguments[1]);
-	inputArguments[1].description = UA_LOCALIZEDTEXT("en-US", "A string, command e.g. \"A\" or \"J1\" or \"J0\"");
-	inputArguments[1].name = UA_STRING("InputCommand");
-	inputArguments[1].dataType = UA_TYPES[UA_TYPES_STRING].typeId;
-	inputArguments[1].valueRank = UA_VALUERANK_SCALAR; /* what is this? */
+	UA_Argument inputArgument;
+	UA_Argument_init(&inputArgument);
+	inputArgument.description = UA_LOCALIZEDTEXT("en-US", "A string, command e.g. \"A\" or \"J1\" or \"J0\"");
+	inputArgument.name = UA_STRING("InputCommand");
+	inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+	inputArgument.valueRank = UA_VALUERANK_SCALAR; /* what is this? */
 	
 	UA_Argument outputArgument;
 	UA_Argument_init(&outputArgument);
@@ -184,7 +147,7 @@ addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalst
                             UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
                             UA_QUALIFIEDNAME(1, "SportSendMsg"),
                             sendAttr, &sportSendMsgMethodCallback,
-                            2, inputArguments, 1, &outputArgument, (void*)global, NULL);
+                            1, &inputArgument, 1, &outputArgument, (void*)global, NULL);
 }
 
 static void
