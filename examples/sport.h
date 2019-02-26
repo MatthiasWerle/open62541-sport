@@ -42,7 +42,7 @@ set_interface_attribs(int fd, int speed)
     tty.c_oflag &= ~(unsigned int)OPOST;
 
     /* fetch bytes as they become available */
-    tty.c_cc[VMIN] = 1;	/* enable timeout to receive first charakter of read if non-zero; read will block until VMIN bytes are received */
+    tty.c_cc[VMIN] = 1;	/* enable timeout to receive first character of read if non-zero; read will block until VMIN bytes are received */
     tty.c_cc[VTIME] = 1; /* timeout time in tenth of a second */
 
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
@@ -82,7 +82,17 @@ sport_send_msg(char* msg, int fd)
         printf("Error %d from write: %s \n wlen= %d\n", errno, strerror(errno), wlen);
     }
     tcdrain(fd);    /* delay for output */
-	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "sport_send_msg was called");
+	
+	/*debug*/
+//	delay(1000);
+	int rdlen = 0; 
+	char buf[80];
+	rdlen = (int)read(fd, buf, sizeof(buf));
+	printf("\nsent msg = %s \n", msg);
+	printf("received msg: rdlen = %d \n",rdlen);
+	printf("received msg: buf = %s \n\n", buf);
+	strcpy(buf, "");
+	
     return (int)wlen;
 }
 

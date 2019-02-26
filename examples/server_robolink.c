@@ -51,36 +51,65 @@ static void stopHandler(int sign) {
 		UA_Server *server ;
 		UA_Boolean *running;
 		UA_StatusCode *status;
-	} server_variables;
+		globalstructMC *global;
+	} thread_args;
 
 /***********/
 /* THREADS */
 /***********/
 static void *threadServer(void *vargp)
 {
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadServer started to run the server");
+	thread_args *arg = (thread_args*)vargp;
+
 	/* Run the server loop */
-	server_variables *arg = (server_variables*)vargp;
     UA_StatusCode status = UA_Server_run(arg->server, arg->running);
 	*(arg->status) = status;
     UA_Server_delete(arg->server);
     UA_ServerConfig_delete(arg->config);
-	/* Run the server loop */
-//    UA_StatusCode status = UA_Server_run(server, &running);
-//    UA_Server_delete(server);
-//    UA_ServerConfig_delete(config);
 	return NULL;
 }
 
-static void *threadComm(void *arg)
+static void *threadComm(void *vargp)
 {
-	delay(5000);
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadComm started to supervise port communication");
+	do{
+		delay(10000);
+		printf("threadComm: 10s passed \n");
+	}while(1);
+	return NULL;
+}
 
-	printf("\n printf in threadComm \n \n");
+static void *threadTest(void *vargp)
+{
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadTest started to test stuff");
+	int tester = 0;
+	if (tester == 1){
+		thread_args *arg = (thread_args*)vargp;
+		globalstructMC *glob = arg->global;
+	
+		char ttynm1[20];
+		strcpy(ttynm1, glob->ttyname);
+		char ttynm2[20];
+		strcpy(ttynm2, glob->ttyname);
+
+		printf("ttyname = %s \n", ttynm1);
+		printf("ttyname = %s \n", ttynm2);
+	}
+
+	int j = 0;
+	while (j<3){
+		j++;
+		delay(2500);
+		printf("threadTest: 2.5s passed \n");
+	}
+	
+	printf("about to close threadTest ...\n");
 	return NULL;
 }
 /*************/
 /* MAIN LOOP */
-/************/
+/*************/
 int main(int argc, char** argv)
 {
     signal(SIGINT, stopHandler);
@@ -156,54 +185,60 @@ int main(int argc, char** argv)
 	UA_String fdvalue = UA_STRING("1337");
 	UA_Variant_setScalar(&fdId, &fdvalue, &UA_TYPES[UA_TYPES_STRING]);
 
-
 	/* start thread to run server */
 //	UA_ServerConfig *config, UA_Server *server, UA_Boolean running
 
 	/* DEBUG Test Variables */
-	char msg[] = "#*A\r"; 	/* test command, Motor starten */
-	printf("sending msg = %s\n ... \n",msg);
-	sport_send_msg(msg, global[0].fd);
-	delay(1500);
-	strcpy(msg, "#*s-40000\r");
-	printf("sending msg = %s\n ... \n",msg);
-    sport_send_msg(msg, global[0].fd);
-	delay(1500);
-	strcpy(msg, "#*A\r");
-	printf("sending msg = %s\n ... \n",msg);
-    sport_send_msg(msg, global[0].fd);
-	delay(1500);
-	strcpy(msg, "#*s40001\r");
-	printf("sending msg = %s\n ... \n",msg);
-    sport_send_msg(msg, global[0].fd);
-	delay(1500);
-	strcpy(msg, "#*A\r");
-	printf("sending msg = %s\n ... \n",msg);
-    sport_send_msg(msg, global[0].fd);
-	delay(1500);
-	strcpy(msg, "#*S\r");
-	printf("sending msg = %s\n ... \n",msg);
-    sport_send_msg(msg, global[0].fd);
 
+	char msg[] = "#*A\r"; 	/* test command, Motor starten */
+
+	int nerv = 0;
+	if(nerv>0){
+		printf("sending msg = %s\n ... \n",msg);
+		sport_send_msg(msg, global[0].fd);
+		delay(1500);
+		strcpy(msg, "#*s-40000\r");
+		printf("sending msg = %s\n ... \n",msg);
+		sport_send_msg(msg, global[0].fd);
+		delay(1500);
+		strcpy(msg, "#*A\r");
+		printf("sending msg = %s\n ... \n",msg);
+		sport_send_msg(msg, global[0].fd);
+		delay(1500);
+		strcpy(msg, "#*s40001\r");
+		printf("sending msg = %s\n ... \n",msg);
+		sport_send_msg(msg, global[0].fd);
+		delay(1500);
+		strcpy(msg, "#*A\r");
+		printf("sending msg = %s\n ... \n",msg);
+		sport_send_msg(msg, global[0].fd);
+		delay(1500);
+		strcpy(msg, "#*S\r");
+		printf("sending msg = %s\n ... \n",msg);
+		sport_send_msg(msg, global[0].fd);
+	}
+	
     /* simple noncanonical input */
 	printf("fyi start to listen... \n");
 	sport_listen(msg, global[0].fd);
 	printf("fyi end of listening... \n");
-	
-	server_variables arg;
-	arg.config = config;
-	arg.server = server;
-	arg.running = &running;
-	
+
+	/* arguments for multiple threads */
+	thread_args arg;
+		arg.config = config;
+		arg.server = server;
+		arg.running = &running;
+		arg.global = &global[0];
+	void *vargp = (void*)&arg;	/* void argument pionter */
+
+	/* create multiple threads */
 	pthread_t threadServerId;
 	pthread_t threadCommId;
-	
-	void *vargp = (void*)&arg;	/* void argument pionter */
-	printf("running = %d \n", *(arg.running));
-	
+	pthread_t threadTestId;
 	pthread_create(&threadServerId, NULL, threadServer, vargp);
 	pthread_create(&threadCommId, NULL, threadComm, NULL);
-	
+	pthread_create(&threadTestId, NULL, threadTest, NULL);
+
 	pthread_exit(NULL);
 	
 	UA_StatusCode *statusreturn = arg.status;
