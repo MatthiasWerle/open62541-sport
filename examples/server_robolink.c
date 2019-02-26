@@ -14,15 +14,10 @@
 #include <string.h>
 #include <stdint.h>
 #include <time.h>				/* clock() function */
+#include <unistd.h>
+#include <pthread.h>			/* allows multi-threading */
 
-//#include "func.h"				/* helpful library eg. set/get nodeId or attributes */
-
-	typedef struct {
-		char* ttyname;
-		int fd;
-		int motorAddr;
-	} globalstructMC;
-
+// #include "func.h"
 #include "sport.h" 				/* serial port communication */
 #include "nanotec_smci_etc.h"	/* command list for step motor controllers from nanotec */
 
@@ -31,6 +26,9 @@
 /*********************/
 #define N 4 /* max. number of motor controllers */
 
+/*********************************/
+/* FUNCTIONS AND TYPEDEFINITIONS */
+/*********************************/
 static void delay(int milli_seconds) 
 { 
     // Stroing start time 
@@ -41,9 +39,6 @@ static void delay(int milli_seconds)
         ; 
 } 
 
-/******************/
-/* PROGRAMM START */
-/******************/
 /* server stop handler */
 UA_Boolean running = true;
 static void stopHandler(int sign) {
@@ -51,6 +46,38 @@ static void stopHandler(int sign) {
     running = false;
 }
 
+	typedef struct {
+		UA_ServerConfig *config;
+		UA_Server *server ;
+		UA_Boolean *running;
+		UA_StatusCode *status;
+	} server_variables;
+
+/***********/
+/* THREADS */
+/***********/
+static void *threadServer(void *vargp)
+{
+	/* Run the server loop */
+	server_variables *arg = (server_variables*)vargp;
+    UA_StatusCode status = UA_Server_run(arg->server, arg->running);
+	*(arg->status) = status;
+    UA_Server_delete(arg->server);
+    UA_ServerConfig_delete(arg->config);
+	/* Run the server loop */
+//    UA_StatusCode status = UA_Server_run(server, &running);
+//    UA_Server_delete(server);
+//    UA_ServerConfig_delete(config);
+	return NULL;
+}
+
+static void *threadComm(void *arg)
+{
+	delay(5000);
+
+	printf("\n printf in threadComm \n \n");
+	return NULL;
+}
 /*************/
 /* MAIN LOOP */
 /************/
@@ -86,14 +113,16 @@ int main(int argc, char** argv)
 		
 	/* set global variables */
 	for (i=0; i<N; i=i+1){
-	/* set attributes of array struct variable global */
+		/* set attributes of array struct variable global */
 		global[i].fd = set_fd(global[i].ttyname);
 		global[i].fd = 3; 																		/* DEBUG muss später weg */
 		printf("fyi Idx: %d; fd: %d for %s \n", i, global[i].fd, global[i].ttyname);
-	/* set array of pointers to array elements of struct variable global */
+		
+		/* set array of pointers to array elements of struct variable global */
 		globalpointer[i] = (globalstructMC*)&(global[i]);
 		printf("fyi globalpointer[%d]->fd = %d \n", i, globalpointer[i]->fd);
-	/* declare NodeId's for every object instance of a motor controller */
+		
+		/* declare NodeId's for every object instance of a motor controller */
 		nameid[i] = (char*)malloc(sizeof(char*) * 10);
 		namenr[i] = (char*)malloc(sizeof(char*) * 10);
 		strcpy(*(nameid+i), "MCId");
@@ -102,7 +131,8 @@ int main(int argc, char** argv)
 		printf("fyi *(nameid+1) = %s \n", *(nameid+i));
 		nodeIdMC[i] = UA_NODEID_STRING(1,*(nameid+i));
 		printf("(char*)nodeIdMC[i].identifier.string.data = %s \n",(char*)nodeIdMC[i].identifier.string.data);
-	/* set connection settings for serial port */
+		
+		/* set connection settings for serial port */
 		set_interface_attribs(global[i].fd, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
 		set_blocking(global[i].fd, 0);						/* set blocking for read off */
 	}
@@ -121,53 +151,66 @@ int main(int argc, char** argv)
 		addMotorControllerObjectInstance(server, *(namebrowse+i), &nodeIdMC[i], &global[i]);
 	}
 
+	/* WIP changing object properties, yet not working */
+	UA_Variant fdId;
+	UA_String fdvalue = UA_STRING("1337");
+	UA_Variant_setScalar(&fdId, &fdvalue, &UA_TYPES[UA_TYPES_STRING]);
 
 
-
-
-	/* Adding Methods */
-//	printf("fyi adding methods ... \n");
-//	addSportSendMsgMethod(server);
-
+	/* start thread to run server */
+//	UA_ServerConfig *config, UA_Server *server, UA_Boolean running
 
 	/* DEBUG Test Variables */
 	char msg[] = "#*A\r"; 	/* test command, Motor starten */
 	printf("sending msg = %s\n ... \n",msg);
 	sport_send_msg(msg, global[0].fd);
-	delay(3000);
+	delay(1500);
 	strcpy(msg, "#*s-40000\r");
 	printf("sending msg = %s\n ... \n",msg);
     sport_send_msg(msg, global[0].fd);
-	delay(3000);
+	delay(1500);
 	strcpy(msg, "#*A\r");
 	printf("sending msg = %s\n ... \n",msg);
     sport_send_msg(msg, global[0].fd);
-	delay(3000);
+	delay(1500);
 	strcpy(msg, "#*s40001\r");
 	printf("sending msg = %s\n ... \n",msg);
     sport_send_msg(msg, global[0].fd);
-	delay(3000);
+	delay(1500);
 	strcpy(msg, "#*A\r");
 	printf("sending msg = %s\n ... \n",msg);
     sport_send_msg(msg, global[0].fd);
-	
+	delay(1500);
+	strcpy(msg, "#*S\r");
+	printf("sending msg = %s\n ... \n",msg);
+    sport_send_msg(msg, global[0].fd);
+
     /* simple noncanonical input */
 	printf("fyi start to listen... \n");
 	sport_listen(msg, global[0].fd);
 	printf("fyi end of listening... \n");
-
-	/* WIP changing object properties, yet not working */
-	UA_Variant fdId;
-	UA_String fdvalue = UA_STRING("1337");
-	UA_Variant_setScalar(&fdId, &fdvalue, &UA_TYPES[UA_TYPES_STRING]);
 	
+	server_variables arg;
+	arg.config = config;
+	arg.server = server;
+	arg.running = &running;
+	
+	pthread_t threadServerId;
+	pthread_t threadCommId;
+	
+	void *vargp = (void*)&arg;	/* void argument pionter */
+	printf("running = %d \n", *(arg.running));
+	
+	pthread_create(&threadServerId, NULL, threadServer, vargp);
+	pthread_create(&threadCommId, NULL, threadComm, NULL);
+	
+	pthread_exit(NULL);
+	
+	UA_StatusCode *statusreturn = arg.status;
+	return (int)*statusreturn;
+
 //	UA_StatusCode test = UA_Server_readValue(server, UA_NODEID_STRING(1, "MCId1"), &fdAttr.value);
 //	printf("UA_Statuscode test = %d\n", (int)test);
 //	UA_Server_writeObjectProperty(server, UA_NODEID_STRING(1,"MCId1"), UA_QUALIFIEDNAME(1, "fdId"), fdId);
 
-    /* 20) Run the server loop */
-    UA_StatusCode status = UA_Server_run(server, &running);
-    UA_Server_delete(server);
-    UA_ServerConfig_delete(config);
-    return (int)status; /* probably implicitly conversion to int */
 }

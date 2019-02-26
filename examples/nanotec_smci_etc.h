@@ -5,28 +5,42 @@
 /*****************************************/
 /* Add Motor Controller Object Instances */
 /*****************************************/
+/* typedef for global variable */
+	typedef struct {
+		char* ttyname;															/* tty portname e.g. /dev/ttyUSB0 */
+		int fd;																	/* file descriptor of tty port */
+		int motorAddr;															/* preconfigured motor adress of nanotec stepper motor driver with integrated controller */
+	} globalstructMC;
 
 /* predefined identifier for later use */
 UA_NodeId motorControllerTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1001}};
 
 static void
 defineObjectTypes(UA_Server *server) {
-	UA_Int32 defInt = 161;														/* default variable */
-	UA_String defStr = UA_STRING("Alerta");										/* default variable */
-	
+	/* default values */
+	UA_String defmn = UA_STRING("Nanotec"); 											/* default manufacturer name */
+	UA_String defmodel = UA_STRING("SMCI47-S-2"); 									/* default model */
+	/* default values placeholder */
+	UA_Int32 defInt = 161;															/* default variable */
+
     /* Define the object type for "Device" */
-    UA_NodeId deviceTypeId; /* get the nodeid assigned by the server */
     UA_ObjectTypeAttributes dtAttr = UA_ObjectTypeAttributes_default;
     dtAttr.displayName = UA_LOCALIZEDTEXT("en-US", "DeviceType");
+    UA_NodeId deviceTypeId; /* get the nodeid assigned by the server */
     UA_Server_addObjectTypeNode(server, UA_NODEID_NULL,
                                 UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE),
                                 UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
                                 UA_QUALIFIEDNAME(1, "DeviceType"), dtAttr,
                                 NULL, &deviceTypeId);
-
+    /* Make the object type mandatory */
+    UA_Server_addReference(server, deviceTypeId,
+                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
+                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
+						   
 	/* Manufacturer Name */
     UA_VariableAttributes mnAttr = UA_VariableAttributes_default;
     mnAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ManufacturerName");
+    UA_Variant_setScalar(&mnAttr.value, &defmn, &UA_TYPES[UA_TYPES_STRING]);
     UA_NodeId manufacturerNameId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, deviceTypeId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
@@ -40,6 +54,7 @@ defineObjectTypes(UA_Server *server) {
 	/* Model Name */
     UA_VariableAttributes modelAttr = UA_VariableAttributes_default;
     modelAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ModelName");
+    UA_Variant_setScalar(&mnAttr.value, &defmodel, &UA_TYPES[UA_TYPES_STRING]);
 	UA_NodeId modelNameId;
     UA_Server_addVariableNode(server, UA_NODEID_NULL, deviceTypeId,
                               UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
@@ -52,11 +67,11 @@ defineObjectTypes(UA_Server *server) {
 
 	/* Object Type */
     /* Define the object type for "Motor Controller" */
-    UA_ObjectTypeAttributes ptAttr = UA_ObjectTypeAttributes_default;
-    ptAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MotorControllerType");
+    UA_ObjectTypeAttributes ctAttr = UA_ObjectTypeAttributes_default;
+    ctAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MotorControllerType");
     UA_Server_addObjectTypeNode(server, motorControllerTypeId,
                                 deviceTypeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
-                                UA_QUALIFIEDNAME(1, "MotorControllerType"), ptAttr,
+                                UA_QUALIFIEDNAME(1, "MotorControllerType"), ctAttr,
                                 NULL, NULL);
 
 	/* Status */
@@ -107,40 +122,6 @@ defineObjectTypes(UA_Server *server) {
                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
                            UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 
-	/* Motor Controller Index */
-    UA_VariableAttributes motorControllerIdxAttr = UA_VariableAttributes_default;
-    motorControllerIdxAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Motor Controller Index");
-    motorControllerIdxAttr.valueRank = UA_VALUERANK_SCALAR;
-	motorControllerIdxAttr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-    motorControllerIdxAttr.accessLevel = UA_ACCESSLEVELMASK_READ;
-    UA_Variant_setScalar(&motorControllerIdxAttr.value, &defStr, &UA_TYPES[UA_TYPES_INT32]);
-	UA_NodeId motorControllerIdxId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "MotorControllerIndex"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), motorControllerIdxAttr, NULL, &motorControllerIdxId);
-    /* Make the motorControllerIdx variable mandatory */
-    UA_Server_addReference(server, motorControllerIdxId,
-                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
-                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
-
-	/* Filedescriptor */
-    UA_VariableAttributes fdAttr = UA_VariableAttributes_default;
-    fdAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Filedescriptor for serial port");
-    fdAttr.valueRank = UA_VALUERANK_SCALAR;
-	fdAttr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-    fdAttr.accessLevel = UA_ACCESSLEVELMASK_READ; 
-    UA_Variant_setScalar(&fdAttr.value, &defInt, &UA_TYPES[UA_TYPES_INT32]);
-	UA_NodeId fdId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "fdId"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), fdAttr, NULL, &fdId);
-    /* Make the fd variable mandatory */
-    UA_Server_addReference(server, fdId,
-                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
-                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
-
 	/* Device Address */
     UA_VariableAttributes addrAttr = UA_VariableAttributes_default;
     addrAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Device adress");
@@ -159,23 +140,7 @@ defineObjectTypes(UA_Server *server) {
                            UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 }
 
-static void
-addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId, globalstructMC *global) 
-{
-    UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
-    oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
-//    oAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-	printf("this is argument global->fd: %d \n", global->fd);
-    UA_Server_addObjectNode(server, *nodeId,
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
-                            UA_QUALIFIEDNAME(1, name),
-                            motorControllerTypeId, /* this refers to the object type identifier */
-                            oAttr, global, NULL);
-		addSportSendMsgMethod(server, nodeId, global);			/* add method to object instance */
-		addStartMotorMethod(server, nodeId, global);
-}
-
+/* type constructor for controller type */
 static UA_StatusCode
 motorControllerTypeConstructor(UA_Server *server,
                     const UA_NodeId *sessionId, void *sessionContext,
@@ -221,4 +186,147 @@ addMotorControllerTypeConstructor(UA_Server *server) {
     lifecycle.destructor = NULL;
     UA_Server_setNodeTypeLifecycle(server, motorControllerTypeId, lifecycle);
 }
+/*******************/
+/* OTHER FUNCTIONS */
+/*******************/
 
+static void
+MCcommand(const int motorAddr, const char* cmd, const int* valPtr, char* msg)
+{
+	memset(msg,0,strlen(msg));											/* empty message */
+	char motorAddrStr[3];
+	sprintf(motorAddrStr, "%d", motorAddr);
+	char valStr[15];
+	memset(valStr,0,strlen(valStr));											/* empty message */
+	if (valPtr != NULL){
+		printf("*valPtr = %d \n", *valPtr);
+		printf("before sprintf valStr = %s\n", valStr);
+		sprintf(valStr, "%d", *valPtr);
+		printf("after sprintf valStr = %s\n", valStr);
+	}
+	printf("after sprintf \n");
+	strcpy(msg,"#"); 													/* write start sign # to message */
+	strcat(msg, motorAddrStr);											/* append motor adress to message */
+	strcat(msg, cmd);													/* append command to message */
+	strcat(msg, valStr);												/* append value to message */
+	strcat(msg, "\r");													/* append end sign to message */
+}
+
+/*************************************/
+/* CALLBACK METHODS FOR OBJECT NODES */
+/*************************************/
+
+static UA_StatusCode 
+sportSendMsgMethodCallback(UA_Server *server,
+                         const UA_NodeId *sessionId, void *sessionHandle,
+                         const UA_NodeId *methodId, void *methodContext,
+                         const UA_NodeId *objectId, void *objectContext,
+						 size_t inputSize, const UA_Variant *input,
+                         size_t outputSize, UA_Variant *output)
+{
+	/* initial declerations */
+	globalstructMC *global = (globalstructMC*)objectContext;
+	UA_String *inputStr = (UA_String*)input->data; 						/* message to be sent */
+	/* create message */ 
+	char msg[] = "#"; 													/* write start sign # to message */
+	char motorAddr[3];
+	sprintf(motorAddr,"%d",global->motorAddr);
+	strcat(msg, motorAddr);												/* append motor adress to message */
+	char* cmd = (char*)inputStr->data;
+	strcat(msg, cmd);													/* append command to message */
+	strcat(msg, "\r");													/* append end sign to message */
+	/* send message */
+	sport_send_msg(msg, global->fd);
+
+	/* Todo: read on port to check if acknowledgement was sent back */
+	
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
+    return UA_STATUSCODE_GOOD;
+}
+
+static void
+addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
+	UA_Argument inputArgument;
+	UA_Argument_init(&inputArgument);
+	inputArgument.description = UA_LOCALIZEDTEXT("en-US", "A string, command e.g. \"A\" or \"J1\" or \"J0\"");
+	inputArgument.name = UA_STRING("InputCommand");
+	inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+	inputArgument.valueRank = UA_VALUERANK_SCALAR; /* what is this? */
+	
+	UA_Argument outputArgument;
+	UA_Argument_init(&outputArgument);
+	outputArgument.description = UA_LOCALIZEDTEXT("en-US", "A string, message that was sent");
+	outputArgument.name = UA_STRING("OutputMessage");
+	outputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+	outputArgument.valueRank = UA_VALUERANK_SCALAR; /* what is this? */
+	
+	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
+	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Send a string via serial port");
+	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Send a message");
+	sendAttr.executable = true;
+	sendAttr.userExecutable = true;
+	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 
+//							UA_NODEID_STRING(1, "SportSendMsg"),
+//							UA_NODEID_STRING(1, "MCId1"),					/* motor controller 1 as parent */
+//							UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), 	/* objectfolder as parent */
+							*objectNodeId,
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
+                            UA_QUALIFIEDNAME(1, "SportSendMsg"),
+                            sendAttr, &sportSendMsgMethodCallback,
+                            1, &inputArgument, 1, &outputArgument, (void*)global, NULL);
+}
+
+static UA_StatusCode 
+startMotorMethodCallback(UA_Server *server,
+                         const UA_NodeId *sessionId, void *sessionHandle,
+                         const UA_NodeId *methodId, void *methodContext,
+                         const UA_NodeId *objectId, void *objectContext,
+						 size_t inputSize, const UA_Variant *input,
+                         size_t outputSize, UA_Variant *output)
+{
+	globalstructMC *global = (globalstructMC*)objectContext;
+	
+	char msg[] = "test";
+	memset(msg,0,strlen(msg));											/* empty message */
+	MCcommand(1, "A", NULL, msg);
+	printf("fyi start motor msg = %s \n", msg);
+	sport_send_msg(msg, global->fd);									/* send message */
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
+    return UA_STATUSCODE_GOOD;
+}
+
+static void
+addStartMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
+	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
+	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Start Motor with current set");
+	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Start Motor");
+	sendAttr.executable = true;
+	sendAttr.userExecutable = true;
+	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 *objectNodeId,
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
+                            UA_QUALIFIEDNAME(1, "SportSendMsg"),
+                            sendAttr, &startMotorMethodCallback,
+                            0, NULL, 0, NULL, (void*)global, NULL);
+}
+
+
+/************************/
+/* ADD OBJECT INSTANCES */
+/************************/
+static void
+addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId, globalstructMC *global) 
+{
+    UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
+    oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
+//    oAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+	printf("this is argument global->fd: %d \n", global->fd);
+    UA_Server_addObjectNode(server, *nodeId,
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
+                            UA_QUALIFIEDNAME(1, name),
+                            motorControllerTypeId, /* this refers to the object type identifier */
+                            oAttr, global, NULL);
+	/* add methods to object instance */
+	addSportSendMsgMethod(server, nodeId, global);
+	addStartMotorMethod(server, nodeId, global);
+}
