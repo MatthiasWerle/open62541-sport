@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# run UA_Expert (adjust path accordingly)
+"/home/matthias/open62541_project/UaExpert-1.5.0-319-x86_64.AppImage";
+
+# open txt.file with terminal commands to mount remote folders from raspi
+mousepad "/home/matthias/open62541_project/raspi_setup_mount_sshfs.txt";
+
+# open terminal window and establish ssh connection to raspi
+gnome-terminal --title="OPC_UA Server on Raspi" --tab --title="ssh connection to raspi 10.56.4.157" --command="ssh pi@10.56.4.157";
+
