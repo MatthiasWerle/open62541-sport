@@ -25,17 +25,21 @@
 /* GLOBAL PARAMETERS */
 /*********************/
 #define N 4 /* max. number of motor controllers */
+#define DEFAULT_TTYNAME
+//#define DEFAULT_MOTORADDR
+//#define DEBUG_THREADTEST
+
+
+/* 1: send messages in main; 2: threadTest */
 
 /*********************************/
 /* FUNCTIONS AND TYPEDEFINITIONS */
 /*********************************/
 static void delay(int milli_seconds) 
 { 
-    // Stroing start time 
-    clock_t start_time = clock(); 
+    clock_t start_time = clock(); /* Stroing start time */
   
-    // looping till required time is not acheived 
-    while (clock() < start_time + milli_seconds*1000) 
+    while (clock() < start_time + milli_seconds*1000) /*looping till required time is not acheived */
         ; 
 } 
 
@@ -73,38 +77,44 @@ static void *threadServer(void *vargp)
 static void *threadComm(void *vargp)
 {
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadComm started to supervise port communication");
-	do{
-		delay(10000);
-		printf("threadComm: 10s passed \n");
-	}while(1);
+
+#ifdef DEBUG_THREADTEST
+	globalstructMC *glob = ((thread_args*)vargp)->global;
+	char* msg = "#1A\r";
+	int j = 0;
+	while (1){
+		j++;
+		delay(1000);
+		printf("threadComm: %ds passed \n",j);
+		printf("threadComm: sending msg = %s\n ... \n",msg);
+		sport_send_msg(msg, (glob+0)->fd);
+	}
+#endif
+
 	return NULL;
 }
 
 static void *threadTest(void *vargp)
 {
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadTest started to test stuff");
-	int tester = 0;
-	if (tester == 1){
-		thread_args *arg = (thread_args*)vargp;
-		globalstructMC *glob = arg->global;
 	
-		char ttynm1[20];
-		strcpy(ttynm1, glob->ttyname);
-		char ttynm2[20];
-		strcpy(ttynm2, glob->ttyname);
-
-		printf("ttyname = %s \n", ttynm1);
-		printf("ttyname = %s \n", ttynm2);
-	}
-
+#ifdef DEBUG_THREADTEST
+	globalstructMC *glob = ((thread_args*)vargp)->global;
+	printf("ttyname = %s \n", (glob+0)->ttyname);
+	printf("ttyname = %s \n", (glob+1)->ttyname);
+	char* msg = "#1S\r";
 	int j = 0;
-	while (j<3){
+	delay(1000);
+	while (1){
 		j++;
-		delay(2500);
-		printf("threadTest: 2.5s passed \n");
+		delay(1000);
+		printf("threadTest: %fs passed \n",j+0.5);
+		printf("threadTest: sending msg = %s\n ... \n",msg);
+		sport_send_msg(msg, (glob+0)->fd);
 	}
-	
-	printf("about to close threadTest ...\n");
+#endif
+
+	printf("closing threadTest ...\n");
 	return NULL;
 }
 /*************/
@@ -119,6 +129,8 @@ int main(int argc, char** argv)
     UA_ServerConfig *config = UA_ServerConfig_new_default();
     UA_Server *server = UA_Server_new(config);
 
+	delay(1);
+
 	/* declare global variables */
 	int i;										/* index for loops */
 	char **nameid = NULL;
@@ -131,20 +143,39 @@ int main(int argc, char** argv)
 	UA_NodeId nodeIdMC[N];						/* Array of NodeId's for every Motor Controller Object Instance */
 	globalstructMC global[N];
 	globalstructMC *globalpointer[N];
-		global[0].ttyname = "/dev/ttyUSB0";
-		global[1].ttyname = "/dev/ttyUSB1";
-		global[2].ttyname = "/dev/ttyUSB2";
-		global[3].ttyname = "/dev/ttyUSB3";
-		global[0].motorAddr = 1;
-		global[1].motorAddr = 1;
-		global[2].motorAddr = 3;
-		global[3].motorAddr = 4;
-		
+#ifdef DEFAULT_TTYNAME
+	global[0].ttyname = "/dev/ttyUSB0";
+	global[1].ttyname = "/dev/ttyUSB1";
+	global[2].ttyname = "/dev/ttyUSB2";
+	global[3].ttyname = "/dev/ttyUSB3";
+#else
+	global[0].ttyname = "/dev/ttyUSB0";
+	global[1].ttyname = "/dev/ttyUSB1";
+	global[2].ttyname = "/dev/ttyUSB2";
+	global[3].ttyname = "/dev/ttyUSB3";
+	for (i=0; i<N; i=i+1){
+		printf("Enter device file name (e.g. \"/dev/ttyUSB0\" for MotorController%d: ", i+1);
+		fgets(global[i].ttyname, 50, stdin);
+	}
+#endif
+#ifdef DEFAULT_MOTORADDR
+	for (i=0; i<N; i=i+1){
+		global[i].motorAddr = i+1;
+	}
+#else
+	printf("FYI: individual motor adresses for MotorController range from 1 to 254 \n");
+	printf("FYI: broadcast motor adress is \"*\" \n");
+	for (i=0; i<N; i=i+1){
+		printf("Enter motor adress for MotorController%d: ", i+1);
+		scanf("%d", &(global[i].motorAddr));
+	}
+	printf("\n");
+#endif
+
 	/* set global variables */
 	for (i=0; i<N; i=i+1){
 		/* set attributes of array struct variable global */
 		global[i].fd = set_fd(global[i].ttyname);
-		global[i].fd = 3; 																		/* DEBUG muss später weg */
 		printf("fyi Idx: %d; fd: %d for %s \n", i, global[i].fd, global[i].ttyname);
 		
 		/* set array of pointers to array elements of struct variable global */
@@ -188,36 +219,11 @@ int main(int argc, char** argv)
 	/* start thread to run server */
 //	UA_ServerConfig *config, UA_Server *server, UA_Boolean running
 
-	/* DEBUG Test Variables */
 
+	/* DEBUG Test Variables */
 	char msg[] = "#*A\r"; 	/* test command, Motor starten */
 
-	int nerv = 0;
-	if(nerv>0){
-		printf("sending msg = %s\n ... \n",msg);
-		sport_send_msg(msg, global[0].fd);
-		delay(1500);
-		strcpy(msg, "#*s-40000\r");
-		printf("sending msg = %s\n ... \n",msg);
-		sport_send_msg(msg, global[0].fd);
-		delay(1500);
-		strcpy(msg, "#*A\r");
-		printf("sending msg = %s\n ... \n",msg);
-		sport_send_msg(msg, global[0].fd);
-		delay(1500);
-		strcpy(msg, "#*s40001\r");
-		printf("sending msg = %s\n ... \n",msg);
-		sport_send_msg(msg, global[0].fd);
-		delay(1500);
-		strcpy(msg, "#*A\r");
-		printf("sending msg = %s\n ... \n",msg);
-		sport_send_msg(msg, global[0].fd);
-		delay(1500);
-		strcpy(msg, "#*S\r");
-		printf("sending msg = %s\n ... \n",msg);
-		sport_send_msg(msg, global[0].fd);
-	}
-	
+
     /* simple noncanonical input */
 	printf("fyi start to listen... \n");
 	sport_listen(msg, global[0].fd);
@@ -228,7 +234,7 @@ int main(int argc, char** argv)
 		arg.config = config;
 		arg.server = server;
 		arg.running = &running;
-		arg.global = &global[0];
+		arg.global = global;
 	void *vargp = (void*)&arg;	/* void argument pionter */
 
 	/* create multiple threads */
@@ -236,8 +242,8 @@ int main(int argc, char** argv)
 	pthread_t threadCommId;
 	pthread_t threadTestId;
 	pthread_create(&threadServerId, NULL, threadServer, vargp);
-	pthread_create(&threadCommId, NULL, threadComm, NULL);
-	pthread_create(&threadTestId, NULL, threadTest, NULL);
+	pthread_create(&threadCommId, NULL, threadComm, vargp);
+	pthread_create(&threadTestId, NULL, threadTest, vargp);
 
 	pthread_exit(NULL);
 	
