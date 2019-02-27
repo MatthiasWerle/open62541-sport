@@ -1,0 +1,95 @@
+#####################################
+# INSTRUCTIONS: RASPI REMOTE ACCESS #
+#####################################
+0) enable ssh on raspi (disabled by default)
+
+1) get raspi ip-addr. (as admin via network or via display and keyboard connected to raspi) e.g. 10.56.4.157
+
+1) phys. connect raspi to local network using ethernet
+
+2) establish ssh connection for remote control in terminal with following command:
+	ssh <username_on_device>@<ip_addr>
+
+2.1) optional stuff for more handy development:
+	generate mount folder (terminal: mkdir <foldername_incl_path>)
+	mount files from raspi via ssh fileshare in mount folder with following command: (hardcode further below)
+	sshfs <username_on_device>@<ip_addr_on_device>:<directory_path> <mount_path>
+
+	ssh access via filemanager (e.g. thunar) with path as followed:
+	ssh://<ip_addr>
+
+##################################################################
+# INSTRUCTIONS: OPC_UA PROJECT FOR MOTORCONTROLLER COMMUNICATION #
+##################################################################
+0) optional: install git
+
+1) clone or download git project 
+	https://github.com/MatthiasWerle/open62541-sport.git
+
+2) build examples (server_robolink.c and server_mcsetup.c)
+
+###########################################################
+# INSTRUCTIONS: SETUP COMMUNICATION WITH MOTOR CONTROLLER #
+###########################################################
+1) phys. connect a single(!) motorcontroller according to technical manual to raspi
+	components: energy supply 24V DC, motor(opt. add. encoder), raspi via adapter (e.g. usb-rs485-converter(cp210x))
+
+2) find name of device file for motor controller respectively adapter (e.g. usb-rs485-converter(cp210x)) connected to raspi 
+	use following command in ssh terminal:
+	dmesg | grep tty
+
+3) run OPC_UA server server_mcsetup
+	define invidual motor adress
+
+4) assign individual motor adresses for every single motorcontroller which should act asynchronous to the others 
+	herefor repeat steps 1) to 3)
+
+5) connect all motorcontrollers to raspi
+
+6) run OPC_UA server server_robolink
+
+############################################################
+# NOTES: devices connected to raspi remote control via ssh #
+############################################################
+# display kernel info history related to usb respectively tty
+dmesg | grep usb
+dmesg | grep tty
+
+# list all device files
+ls /dev 
+
+##########################################
+# HARDCODE: RASPI REMOTE ACCESS COMMANDS #
+##########################################
+# mount working directory
+sshfs pi@10.56.4.157:/home/pi ~/fusessh
+
+# mount device file directory
+sshfs pi@10.56.4.157:/dev ~/fusessh_dev
+
+# terminal ssh connection
+ssh pi@10.56.4.157
+
+##########################################################################################################
+# HARDCODE: FROM PC TO RASPI: (RUN ON PC) copy code using absolute paths after fusessh folder is mounted #
+# ATTENTION! ADJUST PATHS TO AVOID OVERWRITING STUFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
+##########################################################################################################
+cp /home/matthias/open62541_project/open62541-sport/examples/func.h /home/matthias/fusessh/open62541-master/examples/func.h | cp /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h /home/matthias/fusessh/open62541-master/examples/nanotec_smci_etc.h | cp /home/matthias/open62541_project/open62541-sport/examples/sport.h /home/matthias/fusessh/open62541-master/examples/sport.h | cp /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c /home/matthias/fusessh/open62541-master/examples/server_robolink.c
+
+# in single lines
+cp /home/matthias/open62541_project/open62541-sport/examples/func.h /home/matthias/fusessh/open62541-master/examples/func.h
+cp /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h /home/matthias/fusessh/open62541-master/examples/nanotec_smci_etc.h
+cp /home/matthias/open62541_project/open62541-sport/examples/sport.h /home/matthias/fusessh/open62541-master/examples/sport.h
+cp /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c /home/matthias/fusessh/open62541-master/examples/server_robolink.c
+
+##########################################################################################################
+# HARDCODE: FROM RASPI TO PC: (RUN ON PC) copy code using absolute paths after fusessh folder is mounted #
+# ATTENTION! ADJUST PATHS TO AVOID OVERWRITING STUFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
+##########################################################################################################
+cp /home/matthias/fusessh/open62541-master/examples/func.h /home/matthias/open62541_project/open62541-sport/examples/func.h | cp /home/matthias/fusessh/open62541-master/examples/nanotec_smci_etc.h /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h | cp /home/matthias/fusessh/open62541-master/examples/sport.h /home/matthias/open62541_project/open62541-sport/examples/sport.h | cp /home/matthias/fusessh/open62541-master/examples/server_robolink.c /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c
+
+# in single lines
+cp /home/matthias/fusessh/open62541-master/examples/func.h /home/matthias/open62541_project/open62541-sport/examples/func.h
+cp /home/matthias/fusessh/open62541-master/examples/nanotec_smci_etc.h /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h
+cp /home/matthias/fusessh/open62541-master/examples/sport.h /home/matthias/open62541_project/open62541-sport/examples/sport.h
+cp /home/matthias/fusessh/open62541-master/examples/server_robolink.c /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c
