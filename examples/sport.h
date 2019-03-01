@@ -64,7 +64,7 @@ set_blocking (int fd, int should_block)
         }
 
         tty.c_cc[VMIN]  = should_block ? 1 : 0;
-        tty.c_cc[VTIME] = 10;            // 1 second read timeout
+        tty.c_cc[VTIME] = 50;            // timeout in tenth of a second
 
         if (tcsetattr (fd, TCSANOW, &tty) != 0)
                 printf ("error %d setting term attributes \n", errno);
@@ -77,63 +77,22 @@ set_blocking (int fd, int should_block)
 static int 
 sport_send_msg(char* msg, int fd)
 {
+	/* write message */
     int wlen = (int)write(fd, msg, strlen(msg)); /* number of bytes written */
+	printf("\nsent msg = %s \n", msg);
     if (wlen != (int)strlen(msg)) {
         printf("Error %d from write: %s \n wlen= %d\n", errno, strerror(errno), wlen);
     }
     tcdrain(fd);    /* delay for output */
-	
-	/*debug*/
-//	delay(1000);
+
+#ifdef READ_RESPONSE
+	/* read answer */
 	int rdlen = 0; 
 	char buf[80];
 	rdlen = (int)read(fd, buf, sizeof(buf));
-	printf("\nsent msg = %s \n", msg);
 	printf("received msg: rdlen = %d \n",rdlen);
 	printf("received msg: buf = %s \n\n", buf);
 	strcpy(buf, "");
-	
+#endif
     return (int)wlen;
-}
-
-static int
-sport_listen(char* msg, int fd)
-{
-	char msg_in[strlen(msg)+50];
-    do {
-        int rdlen = 0;								/* number of bytes read */
-		char buf[80];
-		printf("fyi sizeof(buf): %d \n", sizeof(buf));
-//		fcntl(fd, F_SETFL, O_NDELAY); /* causes read function to return 0 if no characters available on port */
-        rdlen = (int)read(fd, buf, sizeof(buf));
-		//		fcntl(fd, F_SETFL, 0); /* causes read function to restore normal blocking behaviour */
-		printf("fyi rdlen: %i \n", rdlen);
-		printf("fyi buf: ");
-		int i;
-		for(i = 1 ; i == 80; i = i + 1) 
-		{
-			printf("%c", (char)buf[i]); 
-		}
-		printf("\n ... \n");
-		strncat(msg_in, buf, strlen(msg)+50); /* appends part of read input message from buffer to msg_in */
-		printf("fyi msg_in = %s\n",msg_in);
-        if (rdlen > 0) {
-            buf[rdlen] = 0;
-            printf("Read %d: \"%s\"\n", rdlen, buf);
-//			/* display hex */
-//			unsigned char   *p;
-//			printf("Read %d:", rdlen);
-//			for (p = buf; rdlen-- > 0; p++)
-//				printf(" 0x%x", *p);
-//			printf("\n");
-        } else if (rdlen < 0) {
-            printf("Error from read: %d: %s\n", rdlen, strerror(errno));
-			return -1;
-        } else {  /* rdlen == 0 */
-            printf("Timeout from read\n");
-			return -2;
-        }
-        /* repeat read to get full message */
-		return 0;
-    } while (1);
 }

@@ -7,9 +7,9 @@
 /*****************************************/
 /* typedef for global variable */
 	typedef struct {
-		char* ttyname;															/* tty portname e.g. /dev/ttyUSB0 */
+		char ttyname[SIZE_TTYNAME];															/* tty portname e.g. /dev/ttyUSB0 */
 		int fd;																	/* file descriptor of tty port */
-		int motorAddr;															/* preconfigured motor adress of nanotec stepper motor driver with integrated controller */
+		char motorAddr[SIZE_MOTORADDR];															/* preconfigured motor adress of nanotec stepper motor driver with integrated controller */
 	} globalstructMC;
 
 /* predefined identifier for later use */
@@ -191,11 +191,9 @@ addMotorControllerTypeConstructor(UA_Server *server) {
 /*******************/
 
 static void
-MCcommand(const int motorAddr, const char* cmd, const int* valPtr, char* msg)
+MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 {
 	memset(msg,0,strlen(msg));											/* empty message */
-	char motorAddrStr[3];
-	sprintf(motorAddrStr, "%d", motorAddr);
 	char valStr[15];
 	memset(valStr,0,strlen(valStr));											/* empty message */
 	if (valPtr != NULL){
@@ -206,7 +204,7 @@ MCcommand(const int motorAddr, const char* cmd, const int* valPtr, char* msg)
 	}
 	printf("after sprintf \n");
 	strcpy(msg,"#"); 													/* write start sign # to message */
-	strcat(msg, motorAddrStr);											/* append motor adress to message */
+	strcat(msg, motorAddr);												/* append motor adress to message */
 	strcat(msg, cmd);													/* append command to message */
 	strcat(msg, valStr);												/* append value to message */
 	strcat(msg, "\r");													/* append end sign to message */
@@ -227,19 +225,14 @@ sportSendMsgMethodCallback(UA_Server *server,
 	/* initial declerations */
 	globalstructMC *global = (globalstructMC*)objectContext;
 	UA_String *inputStr = (UA_String*)input->data; 						/* message to be sent */
+
 	/* create message */ 
-	char msg[] = "#"; 													/* write start sign # to message */
-	char motorAddr[3];
-	sprintf(motorAddr,"%d",global->motorAddr);
-	strcat(msg, motorAddr);												/* append motor adress to message */
+	char msg[50];
 	char* cmd = (char*)inputStr->data;
-	strcat(msg, cmd);													/* append command to message */
-	strcat(msg, "\r");													/* append end sign to message */
+	MCcommand(global->motorAddr, cmd, NULL, msg);
 	/* send message */
 	sport_send_msg(msg, global->fd);
 
-	/* Todo: read on port to check if acknowledgement was sent back */
-	
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
     return UA_STATUSCODE_GOOD;
 }
@@ -288,10 +281,10 @@ startMotorMethodCallback(UA_Server *server,
 	
 	char msg[] = "test";
 	memset(msg,0,strlen(msg));											/* empty message */
-	MCcommand(1, "A", NULL, msg);
+	MCcommand(global->motorAddr, "A", NULL, msg);
 	printf("fyi start motor msg = %s \n", msg);
 	sport_send_msg(msg, global->fd);									/* send message */
-	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Start Motor was called");
     return UA_STATUSCODE_GOOD;
 }
 

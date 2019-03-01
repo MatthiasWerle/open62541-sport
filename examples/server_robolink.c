@@ -1,3 +1,20 @@
+/*********************/
+/* GLOBAL PARAMETERS */
+/*********************/
+#define BAUDRATE B115200
+#define READ_TIMEOUT_MS 50	/* can't be used in header files for they're thenfor undeclared for the compiler */
+#define SIZE_MOTORADDR 3
+#define SIZE_TTYNAME 50
+#define N 2 				/* max. number of motor controllers */
+#define DEFAULT_TTYNAME
+#define DEFAULT_MOTORADDR
+//#define DEBUG_THREADTEST
+//#define READ_RESPONSE
+//#define READ_CONT
+
+/**********************/
+/* INCLUDED LIBRARIES */
+/**********************/
 #include <signal.h>
 #include <ua_server.h>
 #include <ua_config_default.h>
@@ -21,13 +38,7 @@
 #include "sport.h" 				/* serial port communication */
 #include "nanotec_smci_etc.h"	/* command list for step motor controllers from nanotec */
 
-/*********************/
-/* GLOBAL PARAMETERS */
-/*********************/
-#define N 4 /* max. number of motor controllers */
-#define DEFAULT_TTYNAME
-//#define DEFAULT_MOTORADDR
-//#define DEBUG_THREADTEST
+
 
 
 /* 1: send messages in main; 2: threadTest */
@@ -35,6 +46,13 @@
 /*********************************/
 /* FUNCTIONS AND TYPEDEFINITIONS */
 /*********************************/
+/* server stop handler */
+UA_Boolean running = true;
+static void stopHandler(int sign) {
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "received ctrl-c");
+    running = false;
+}
+
 static void delay(int milli_seconds) 
 { 
     clock_t start_time = clock(); /* Stroing start time */
@@ -42,13 +60,6 @@ static void delay(int milli_seconds)
     while (clock() < start_time + milli_seconds*1000) /*looping till required time is not acheived */
         ; 
 } 
-
-/* server stop handler */
-UA_Boolean running = true;
-static void stopHandler(int sign) {
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "received ctrl-c");
-    running = false;
-}
 
 	typedef struct {
 		UA_ServerConfig *config;
@@ -74,9 +85,9 @@ static void *threadServer(void *vargp)
 	return NULL;
 }
 
-static void *threadComm(void *vargp)
+static void *threadListen(void *vargp)
 {
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadComm started to supervise port communication");
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadListen started to supervise port communication");
 
 #ifdef DEBUG_THREADTEST
 	globalstructMC *glob = ((thread_args*)vargp)->global;
@@ -85,12 +96,21 @@ static void *threadComm(void *vargp)
 	while (1){
 		j++;
 		delay(1000);
-		printf("threadComm: %ds passed \n",j);
-		printf("threadComm: sending msg = %s\n ... \n",msg);
+		printf("threadListen: %ds passed \n",j);
+		printf("threadListen: sending msg = %s\n ... \n",msg);
 		sport_send_msg(msg, (glob+0)->fd);
 	}
 #endif
-
+#ifdef READ_CONT
+	while(1){
+		int rdlen = 0; 
+		char buf[80];
+		rdlen = (int)read(3 , buf, sizeof(buf));
+		printf("received msg: rdlen = %d \n",rdlen);
+		printf("received msg: buf = %s \n\n", buf);
+		strcpy(buf, "");
+	}
+#endif
 	return NULL;
 }
 
@@ -130,44 +150,47 @@ int main(int argc, char** argv)
     UA_Server *server = UA_Server_new(config);
 
 	delay(1);
+	
+	printf("READ_TIMEOUT_MS = %d\n", READ_TIMEOUT_MS);
 
 	/* declare global variables */
 	int i;										/* index for loops */
 	char **nameid = NULL;
 	char **namebrowse = NULL;
 	char **namenr = NULL;
-	nameid = (char**)malloc(sizeof(**nameid)*N);
-	namebrowse = (char**)malloc(sizeof(**nameid)*N);
-	namenr = (char**)malloc(sizeof(**nameid)*N);
+	nameid = (char**)malloc(sizeof(**nameid)*N);		/* pointer to string with name of later used motor controller obj instance nodeId's */
+	namebrowse = (char**)malloc(sizeof(**nameid)*N);	/* pointer to string with name of later used browsenames */
+	namenr = (char**)malloc(sizeof(**nameid)*N);		/* pointer to string with name of later used number to generate nodeId's name */
 
-	UA_NodeId nodeIdMC[N];						/* Array of NodeId's for every Motor Controller Object Instance */
-	globalstructMC global[N];
-	globalstructMC *globalpointer[N];
-#ifdef DEFAULT_TTYNAME
-	global[0].ttyname = "/dev/ttyUSB0";
-	global[1].ttyname = "/dev/ttyUSB1";
-	global[2].ttyname = "/dev/ttyUSB2";
-	global[3].ttyname = "/dev/ttyUSB3";
-#else
-	global[0].ttyname = "/dev/ttyUSB0";
-	global[1].ttyname = "/dev/ttyUSB1";
-	global[2].ttyname = "/dev/ttyUSB2";
-	global[3].ttyname = "/dev/ttyUSB3";
+	UA_NodeId nodeIdMC[N];								/* Array of NodeId's for every Motor Controller Object Instance */
+	globalstructMC global[N];							/* array of structs where each element is assigned to one object instace, defined in nanotec_smci_etc.h */
+
+	printf("jo_test\n");
+	/* declare tty names for every object instance */
+	for (i=0; i<N; i=i+1){
+		char ttyname_tmp[SIZE_TTYNAME];
+		sprintf(ttyname_tmp, "/dev/ttyUSB%d", i);
+		strcpy(global[i].ttyname, ttyname_tmp);
+	}
+#ifndef DEFAULT_TTYNAME
 	for (i=0; i<N; i=i+1){
 		printf("Enter device file name (e.g. \"/dev/ttyUSB0\" for MotorController%d: ", i+1);
-		fgets(global[i].ttyname, 50, stdin);
+		fgets(global[i].ttyname, SIZE_TTYNAME, stdin);
+		global[i].ttyname[strcspn(global[i].ttyname, "\n")] = 0; 	/* delete the "\n" from fgets command at the end of the string */
 	}
 #endif
-#ifdef DEFAULT_MOTORADDR
+
+	/* declare motor addresses for every object instance */
 	for (i=0; i<N; i=i+1){
-		global[i].motorAddr = i+1;
+		sprintf(global[i].motorAddr, "%d", i+1);
 	}
-#else
+#ifndef DEFAULT_MOTORADDR
 	printf("FYI: individual motor adresses for MotorController range from 1 to 254 \n");
 	printf("FYI: broadcast motor adress is \"*\" \n");
 	for (i=0; i<N; i=i+1){
 		printf("Enter motor adress for MotorController%d: ", i+1);
-		scanf("%d", &(global[i].motorAddr));
+		fgets(global[i].motorAddr, SIZE_MOTORADDR, stdin);
+		global[i].motorAddr[strcspn(global[i].motorAddr, "\n")] = 0; 	/* delete the "\n" from fgets command at the end of the string */
 	}
 	printf("\n");
 #endif
@@ -177,10 +200,6 @@ int main(int argc, char** argv)
 		/* set attributes of array struct variable global */
 		global[i].fd = set_fd(global[i].ttyname);
 		printf("fyi Idx: %d; fd: %d for %s \n", i, global[i].fd, global[i].ttyname);
-		
-		/* set array of pointers to array elements of struct variable global */
-		globalpointer[i] = (globalstructMC*)&(global[i]);
-		printf("fyi globalpointer[%d]->fd = %d \n", i, globalpointer[i]->fd);
 		
 		/* declare NodeId's for every object instance of a motor controller */
 		nameid[i] = (char*)malloc(sizeof(char*) * 10);
@@ -193,8 +212,9 @@ int main(int argc, char** argv)
 		printf("(char*)nodeIdMC[i].identifier.string.data = %s \n",(char*)nodeIdMC[i].identifier.string.data);
 		
 		/* set connection settings for serial port */
-		set_interface_attribs(global[i].fd, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
-		set_blocking(global[i].fd, 0);						/* set blocking for read off */
+		printf("Timeout for listing on %s is set to %d ms\n", global[i].ttyname, READ_TIMEOUT_MS);
+		set_interface_attribs(global[i].fd, BAUDRATE);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
+		set_blocking(global[i].fd, 0);						/* set blocking for read off (0) */
 	}
 
 	/* Add Object Instances */
@@ -216,19 +236,6 @@ int main(int argc, char** argv)
 	UA_String fdvalue = UA_STRING("1337");
 	UA_Variant_setScalar(&fdId, &fdvalue, &UA_TYPES[UA_TYPES_STRING]);
 
-	/* start thread to run server */
-//	UA_ServerConfig *config, UA_Server *server, UA_Boolean running
-
-
-	/* DEBUG Test Variables */
-	char msg[] = "#*A\r"; 	/* test command, Motor starten */
-
-
-    /* simple noncanonical input */
-	printf("fyi start to listen... \n");
-	sport_listen(msg, global[0].fd);
-	printf("fyi end of listening... \n");
-
 	/* arguments for multiple threads */
 	thread_args arg;
 		arg.config = config;
@@ -239,12 +246,11 @@ int main(int argc, char** argv)
 
 	/* create multiple threads */
 	pthread_t threadServerId;
-	pthread_t threadCommId;
+	pthread_t threadListenId;
 	pthread_t threadTestId;
 	pthread_create(&threadServerId, NULL, threadServer, vargp);
-	pthread_create(&threadCommId, NULL, threadComm, vargp);
+	pthread_create(&threadListenId, NULL, threadListen, vargp);
 	pthread_create(&threadTestId, NULL, threadTest, vargp);
-
 	pthread_exit(NULL);
 	
 	UA_StatusCode *statusreturn = arg.status;

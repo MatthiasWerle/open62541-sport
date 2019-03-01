@@ -64,32 +64,30 @@ ls /dev
 # mount working directory
 sshfs pi@10.56.4.157:/home/pi ~/fusessh
 
-# mount device file directory
-sshfs pi@10.56.4.157:/dev ~/fusessh_dev
-
 # terminal ssh connection
 ssh pi@10.56.4.157
+pw: raspelbeere
 
 ##########################################################################################################
 # HARDCODE: FROM PC TO RASPI: (RUN ON PC) copy code using absolute paths after fusessh folder is mounted #
 # ATTENTION! ADJUST PATHS TO AVOID OVERWRITING STUFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
 ##########################################################################################################
-cp /home/matthias/open62541_project/open62541-sport/examples/func.h /home/matthias/fusessh/open62541-master/examples/func.h | cp /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h /home/matthias/fusessh/open62541-master/examples/nanotec_smci_etc.h | cp /home/matthias/open62541_project/open62541-sport/examples/sport.h /home/matthias/fusessh/open62541-master/examples/sport.h | cp /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c /home/matthias/fusessh/open62541-master/examples/server_robolink.c
+cp /home/matthias/open62541_project/open62541-sport/examples/func.h /home/matthias/fusessh/open62541-sport/examples/func.h | cp /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h /home/matthias/fusessh/open62541-sport/examples/nanotec_smci_etc.h | cp /home/matthias/open62541_project/open62541-sport/examples/sport.h /home/matthias/fusessh/open62541-sport/examples/sport.h | cp /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c /home/matthias/fusessh/open62541-sport/examples/server_robolink.c
 
 # in single lines
-cp /home/matthias/open62541_project/open62541-sport/examples/func.h /home/matthias/fusessh/open62541-master/examples/func.h
-cp /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h /home/matthias/fusessh/open62541-master/examples/nanotec_smci_etc.h
-cp /home/matthias/open62541_project/open62541-sport/examples/sport.h /home/matthias/fusessh/open62541-master/examples/sport.h
-cp /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c /home/matthias/fusessh/open62541-master/examples/server_robolink.c
+cp /home/matthias/open62541_project/open62541-sport/examples/func.h /home/matthias/fusessh/open62541-sport/examples/func.h
+cp /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h /home/matthias/fusessh/open62541-sport/examples/nanotec_smci_etc.h
+cp /home/matthias/open62541_project/open62541-sport/examples/sport.h /home/matthias/fusessh/open62541-sport/examples/sport.h
+cp /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c /home/matthias/fusessh/open62541-sport/examples/server_robolink.c
 
 ##########################################################################################################
 # HARDCODE: FROM RASPI TO PC: (RUN ON PC) copy code using absolute paths after fusessh folder is mounted #
 # ATTENTION! ADJUST PATHS TO AVOID OVERWRITING STUFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
 ##########################################################################################################
-cp /home/matthias/fusessh/open62541-master/examples/func.h /home/matthias/open62541_project/open62541-sport/examples/func.h | cp /home/matthias/fusessh/open62541-master/examples/nanotec_smci_etc.h /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h | cp /home/matthias/fusessh/open62541-master/examples/sport.h /home/matthias/open62541_project/open62541-sport/examples/sport.h | cp /home/matthias/fusessh/open62541-master/examples/server_robolink.c /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c
+cp /home/matthias/fusessh/open62541-sport/examples/func.h /home/matthias/open62541_project/open62541-sport/examples/func.h | cp /home/matthias/fusessh/open62541-sport/examples/nanotec_smci_etc.h /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h | cp /home/matthias/fusessh/open62541-sport/examples/sport.h /home/matthias/open62541_project/open62541-sport/examples/sport.h | cp /home/matthias/fusessh/open62541-sport/examples/server_robolink.c /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c
 
 # in single lines
-cp /home/matthias/fusessh/open62541-master/examples/func.h /home/matthias/open62541_project/open62541-sport/examples/func.h
-cp /home/matthias/fusessh/open62541-master/examples/nanotec_smci_etc.h /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h
-cp /home/matthias/fusessh/open62541-master/examples/sport.h /home/matthias/open62541_project/open62541-sport/examples/sport.h
-cp /home/matthias/fusessh/open62541-master/examples/server_robolink.c /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c
+cp /home/matthias/fusessh/open62541-sport/examples/func.h /home/matthias/open62541_project/open62541-sport/examples/func.h
+cp /home/matthias/fusessh/open62541-sport/examples/nanotec_smci_etc.h /home/matthias/open62541_project/open62541-sport/examples/nanotec_smci_etc.h
+cp /home/matthias/fusessh/open62541-sport/examples/sport.h /home/matthias/open62541_project/open62541-sport/examples/sport.h
+cp /home/matthias/fusessh/open62541-sport/examples/server_robolink.c /home/matthias/open62541_project/open62541-sport/examples/server_robolink.c
