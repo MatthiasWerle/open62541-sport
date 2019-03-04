@@ -6,9 +6,9 @@
 #define SIZE_MOTORADDR 3
 #define SIZE_TTYNAME 50
 #define N 2 				/* max. number of motor controllers */
+#define N_PORTS 1			/* number of ports, either 1 or N (1 if all motor controllers are connected to the same port or N if each controller is connected to a single port) */
 #define DEFAULT_TTYNAME
 #define DEFAULT_MOTORADDR
-//#define DEBUG_THREADTEST
 //#define READ_RESPONSE
 #define READ_CONT
 
@@ -38,11 +38,6 @@
 #include "sport.h" 				/* serial port communication */
 #include "nanotec_smci_etc.h"	/* command list for step motor controllers from nanotec */
 
-
-
-
-/* 1: send messages in main; 2: threadTest */
-
 /*********************************/
 /* FUNCTIONS AND TYPEDEFINITIONS */
 /*********************************/
@@ -53,8 +48,7 @@ static void stopHandler(int sign) {
     running = false;
 }
 
-static void delay(int milli_seconds) 
-{ 
+static void delay(int milli_seconds) { 
     clock_t start_time = clock(); /* Stroing start time */
   
     while (clock() < start_time + milli_seconds*1000) /*looping till required time is not acheived */
@@ -67,94 +61,85 @@ static void delay(int milli_seconds)
 		UA_Boolean *running;
 		UA_StatusCode *status;
 		globalstructMC *global;
+		pthread_t threadReadMsgId;
 	} thread_args;
 
 /***********/
 /* THREADS */
 /***********/
-static void *threadServer(void *vargp)
-{
+static void *threadServer(void *vargp){
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadServer started to run the server");
-	thread_args *arg = (thread_args*)vargp;
+	thread_args *argp = (thread_args*)vargp;
 
 	/* Run the server loop */
-    UA_StatusCode status = UA_Server_run(arg->server, arg->running);
-	*(arg->status) = status;
-    UA_Server_delete(arg->server);
-    UA_ServerConfig_delete(arg->config);
+    UA_StatusCode status = UA_Server_run(argp->server, argp->running);
+	*(argp->status) = status;
+    UA_Server_delete(argp->server);
+    UA_ServerConfig_delete(argp->config);
 	return NULL;
 }
 
-static void *threadListen(void *vargp)
-{
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadListen started to supervise port communication");
-	globalstructMC *glob = ((thread_args*)vargp)->global;
-	printf("fd = %d\n", (glob+0)->fd);
-#ifdef DEBUG_THREADTEST
-	char* msg = "#1A\r";
-	int j = 0;
-	while (1){
-		j++;
-		delay(1000);
-		printf("threadListen: %ds passed \n",j);
-		printf("threadListen: sending msg = %s\n ... \n",msg);
-		sport_send_msg(msg, (glob+0)->fd);
-	}
-#endif
-
-#ifdef READ_CONT /* reads continuously on one filedescriptor */
-	int rdlen = 0; 
-	char buf[80];
-	while(1){
-		delay(100);
+static void *threadReadMsg(void *vargp){
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadReadMsg started to read buffered input message");
+	thread_args *argp = (thread_args*)vargp;
+	globalstructMC *glob = argp->global;
+    if (pthread_mutex_init((glob+0)->lock, NULL) == 0){
+		pthread_mutex_lock((glob+0)->lock);
+		printf("threadReadMsg: mutex locked\n");
+		printf("threadReadMsg: fd = %d\n", (glob+0)->fd);
+		int rdlen = 0; 
+		char buf[80];
 		memset(buf, '\0', sizeof(buf));
 		rdlen = (int)read((glob+0)->fd , buf, sizeof(buf));
 		printf("received msg: rdlen = %d \n",rdlen);
 		printf("received msg: buf = %s \n\n", buf);
-		strcpy(buf, "");
+		pthread_mutex_unlock((glob+0)->lock);
+		printf("threadReadMsg: mutex unlocked \n");
 	}
-#endif
+	else{
+		printf("\n mutex init failed\n");
+	}
 	return NULL;
 }
 
-static void *threadTest(void *vargp)
+static void *threadListen(void *vargp1)
 {
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadTest started to test stuff");
-	
-#ifdef DEBUG_THREADTEST
-	globalstructMC *glob = ((thread_args*)vargp)->global;
-	printf("ttyname = %s \n", (glob+0)->ttyname);
-	printf("ttyname = %s \n", (glob+1)->ttyname);
-	char* msg = "#1S\r";
-	int j = 0;
-	delay(1000);
-	while (1){
-		j++;
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadListen started to supervise port communication");
+#ifdef READ_CONT 										/* reads continuously on one filedescriptor */
+	thread_args *argp1 = (thread_args*)vargp1;
+	globalstructMC *glob1 = argp1->global;
+	printf("threadListen: fd = %d\n", (glob1+0)->fd);
+	int rdlen1 = 0; 
+	char buf1[80];
+	while(1){
 		delay(1000);
-		printf("threadTest: %fs passed \n",j+0.5);
-		printf("threadTest: sending msg = %s\n ... \n",msg);
-		sport_send_msg(msg, (glob+0)->fd);
+		if (pthread_mutex_trylock((glob1+0)->lock) != 0){
+			pthread_mutex_lock((glob1+0)->lock);
+			printf("threadListen: mutex locked \n");
+			memset(buf1, '\0', sizeof(buf1));
+			rdlen1 = (int)read((glob1+0)->fd , buf1, sizeof(buf1));
+			printf("received msg: rdlen1 = %d \n",rdlen1);
+			printf("received msg: buf1 = %s \n\n", buf1);
+			pthread_mutex_unlock((glob1+0)->lock);
+			printf("threadListen: mutex unlocked \n");
+		}
 	}
 #endif
-
-	printf("closing threadTest ...\n");
 	return NULL;
 }
+
 /*************/
 /* MAIN LOOP */
 /*************/
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv){
+	delay(1);
+
     signal(SIGINT, stopHandler);
     signal(SIGTERM, stopHandler); /* catch ctrl-c */
 
     /* Create a server listening on port 4840 */
     UA_ServerConfig *config = UA_ServerConfig_new_default();
     UA_Server *server = UA_Server_new(config);
-
-	delay(1);
-	
-	printf("READ_TIMEOUT_MS = %d\n", READ_TIMEOUT_MS);
 
 	/* declare global variables */
 	int i;										/* index for loops */
@@ -168,7 +153,12 @@ int main(int argc, char** argv)
 	UA_NodeId nodeIdMC[N];								/* Array of NodeId's for every Motor Controller Object Instance */
 	globalstructMC global[N];							/* array of structs where each element is assigned to one object instace, defined in nanotec_smci_etc.h */
 
-	printf("jo_test\n");
+	/* thread IDs */
+	pthread_t threadServerId;
+	pthread_t threadReadMsgId;
+	pthread_t threadListenId;
+	pthread_mutex_t lock[N_PORTS];
+
 	/* declare tty names for every object instance */
 	for (i=0; i<N; i=i+1){
 		char ttyname_tmp[SIZE_TTYNAME];
@@ -182,6 +172,16 @@ int main(int argc, char** argv)
 		global[i].ttyname[strcspn(global[i].ttyname, "\n")] = 0; 	/* delete the "\n" from fgets command at the end of the string */
 	}
 #endif
+
+	/* declare lock for every ttyname */
+	for (i=0; i<N; i=i+1){
+#if (N_PORTS == 1)
+		global[i].lock = &(lock[0]);
+#else 
+		global[i].lock = &(lock[i]);
+#endif
+	}
+
 
 	/* declare motor addresses for every object instance */
 	for (i=0; i<N; i=i+1){
@@ -218,7 +218,15 @@ int main(int argc, char** argv)
 		printf("Timeout for listing on %s is set to %d ms\n", global[i].ttyname, READ_TIMEOUT_MS);
 		set_interface_attribs(global[i].fd, BAUDRATE);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
 	}
-
+	
+	/* arguments for multiple threads */
+	thread_args arg;
+		arg.config = config;
+		arg.server = server;
+		arg.running = &running;
+		arg.global = global;
+	void *vargp = (void*)&arg;	/* void argument pointer */
+	
 	/* Add Object Instances */
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "define object types and add object instances");
     defineObjectTypes(server);
@@ -233,28 +241,20 @@ int main(int argc, char** argv)
 		addMotorControllerObjectInstance(server, *(namebrowse+i), &nodeIdMC[i], &global[i]);
 	}
 
-	/* WIP changing object properties, yet not working */
-	UA_Variant fdId;
-	UA_String fdvalue = UA_STRING("1337");
-	UA_Variant_setScalar(&fdId, &fdvalue, &UA_TYPES[UA_TYPES_STRING]);
-
-	/* arguments for multiple threads */
-	thread_args arg;
-		arg.config = config;
-		arg.server = server;
-		arg.running = &running;
-		arg.global = global;
-	void *vargp = (void*)&arg;	/* void argument pionter */
-
 	/* create multiple threads */
-	pthread_t threadServerId;
-	pthread_t threadListenId;
-	pthread_t threadTestId;
 	pthread_create(&threadServerId, NULL, threadServer, vargp);
+	sport_send_msg("#*$\r",3);
+	printf("create threadReadMsg\n");
+	pthread_create(&threadReadMsgId, NULL, threadReadMsg, vargp);
+	delay(1000);
+	sport_send_msg("#*Z|\r",3);
+	delay(1000);
+	printf("create threadListen\n");
 	pthread_create(&threadListenId, NULL, threadListen, vargp);
-	pthread_create(&threadTestId, NULL, threadTest, vargp);
+	pthread_mutex_destroy(lock);
 	pthread_exit(NULL);
-	
+
+	printf("created all threads");
 	UA_StatusCode *statusreturn = arg.status;
 	return (int)*statusreturn;
 

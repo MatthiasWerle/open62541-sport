@@ -61,20 +61,10 @@ sport_send_msg(char* msg, int fd)
 {
 	/* write message */
     int wlen = (int)write(fd, msg, strlen(msg)); /* number of bytes written */
-	printf("\nsent msg = %s \n", msg);
+	printf("\n sent msg = %s \n", msg);
     if (wlen != (int)strlen(msg)) {
         printf("Error %d from write: %s \n wlen= %d\n", errno, strerror(errno), wlen);
     }
     tcdrain(fd);    /* delay for output */
-
-#ifdef READ_RESPONSE
-	/* read answer */
-	int rdlen = 0; 
-	char buf[80];
-	rdlen = (int)read(fd, buf, sizeof(buf));
-	printf("received msg: rdlen = %d \n",rdlen);
-	printf("received msg: buf = %s \n\n", buf);
-	strcpy(buf, "");
-#endif
     return (int)wlen;
 }

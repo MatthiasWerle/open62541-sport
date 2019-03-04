@@ -10,6 +10,7 @@
 		char ttyname[SIZE_TTYNAME];															/* tty portname e.g. /dev/ttyUSB0 */
 		int fd;																	/* file descriptor of tty port */
 		char motorAddr[SIZE_MOTORADDR];															/* preconfigured motor adress of nanotec stepper motor driver with integrated controller */
+		pthread_mutex_t *lock;
 	} globalstructMC;
 
 /* predefined identifier for later use */
@@ -213,6 +214,164 @@ MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 /*************************************/
 /* CALLBACK METHODS FOR OBJECT NODES */
 /*************************************/
+static UA_StatusCode 
+startMotorMethodCallback(UA_Server *server,
+                         const UA_NodeId *sessionId, void *sessionHandle,
+                         const UA_NodeId *methodId, void *methodContext,
+                         const UA_NodeId *objectId, void *objectContext,
+						 size_t inputSize, const UA_Variant *input,
+                         size_t outputSize, UA_Variant *output)
+{
+	globalstructMC *global = (globalstructMC*)objectContext;
+	
+	char msg[7];
+	memset(msg,0,strlen(msg));											/* empty message */
+	MCcommand(global->motorAddr, "A", NULL, msg);
+	printf("fyi start motor msg = %s \n", msg);
+	sport_send_msg(msg, global->fd);									/* send message */
+
+#ifdef READ_RESPONSE
+	/* read answer */
+	int rdlen = 0; 
+	char buf[80];
+	memset(buf, '\0', sizeof(buf));
+	rdlen = (int)read(global->fd, buf, sizeof(buf));
+	printf("received msg: rdlen = %d \n",rdlen);
+	printf("received msg: buf = %s \n\n", buf);
+	memset(buf, '\0', sizeof(buf));
+#endif
+
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Start Motor was called");
+    return UA_STATUSCODE_GOOD;
+}
+
+static void
+addStartMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
+	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
+	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Start Motor with current set");
+	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Start Motor");
+	sendAttr.executable = true;
+	sendAttr.userExecutable = true;
+	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 *objectNodeId,
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
+                            UA_QUALIFIEDNAME(1, "StartMotorMethod"),
+                            sendAttr, &startMotorMethodCallback,
+                            0, NULL, 0, NULL, (void*)global, NULL);
+}
+
+static UA_StatusCode 
+stopMotorMethodCallback(UA_Server *server,
+                         const UA_NodeId *sessionId, void *sessionHandle,
+                         const UA_NodeId *methodId, void *methodContext,
+                         const UA_NodeId *objectId, void *objectContext,
+						 size_t inputSize, const UA_Variant *input,
+                         size_t outputSize, UA_Variant *output)
+{
+	globalstructMC *global = (globalstructMC*)objectContext;
+	
+	char msg[7];
+	memset(msg,0,strlen(msg));											/* empty message */
+	MCcommand(global->motorAddr, "S", NULL, msg);
+	printf("fyi stop motor msg = %s \n", msg);
+	sport_send_msg(msg, global->fd);									/* send message */
+
+#ifdef READ_RESPONSE
+	/* read answer */
+	int rdlen = 0; 
+	char buf[80];
+	memset(buf, '\0', sizeof(buf));
+	rdlen = (int)read(global->fd, buf, sizeof(buf));
+	printf("received msg: rdlen = %d \n",rdlen);
+	printf("received msg: buf = %s \n\n", buf);
+	memset(buf, '\0', sizeof(buf));
+#endif
+
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Stop Motor was called");
+    return UA_STATUSCODE_GOOD;
+}
+
+static void
+addStopMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
+	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
+	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Stop Motor with current set");
+	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Stop Motor");
+	sendAttr.executable = true;
+	sendAttr.userExecutable = true;
+	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 *objectNodeId,
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
+                            UA_QUALIFIEDNAME(1, "StopMotorMethod"),
+                            sendAttr, &stopMotorMethodCallback,
+                            0, NULL, 0, NULL, (void*)global, NULL);
+}
+
+static UA_StatusCode 
+readSetMethodCallback(UA_Server *server,
+                         const UA_NodeId *sessionId, void *sessionHandle,
+                         const UA_NodeId *methodId, void *methodContext,
+                         const UA_NodeId *objectId, void *objectContext,
+						 size_t inputSize, const UA_Variant *input,
+                         size_t outputSize, UA_Variant *output)
+{
+	/* initial declerations */
+	globalstructMC *global = (globalstructMC*)objectContext;
+	char msg[8];												/* msg = "#<motorAddr>Z|\r" */
+	char* cmd = "Z|";
+	MCcommand(global->motorAddr, cmd, NULL, msg);				/* concatenate message */
+
+    if (pthread_mutex_trylock(global->lock) != 0){
+		pthread_mutex_lock(global->lock);
+		printf("readSetMethod: locked mutex\n");
+
+		tcflush(global->fd, TCIFLUSH); 								/* flush input buffer */
+		sport_send_msg(msg, global->fd);							/* send message */
+
+		/* read answer */
+		int rdlen = 0; 
+		char buf[80];
+		memset(buf, '\0', sizeof(buf));
+		rdlen = (int)read(global->fd, buf, sizeof(buf));
+		printf("received msg: rdlen = %d \n",rdlen);
+		printf("received msg: buf = %s \n\n", buf);
+		UA_String tmp = UA_STRING_ALLOC(buf);
+		UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]);
+		pthread_mutex_unlock(global->lock);
+		printf("readSetMethod: unlocked mutex\n");
+	}
+	else
+		printf("couldn't use method, mutex was locked \n");
+
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Read Set was called");
+    return UA_STATUSCODE_GOOD;
+}
+
+static void
+addReadSetMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
+	UA_Argument inputArgument;
+	UA_Argument_init(&inputArgument);
+	inputArgument.description = UA_LOCALIZEDTEXT("en-US", "An unnecessary string");
+	inputArgument.name = UA_STRING("InputCommand");
+	inputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+	inputArgument.valueRank = UA_VALUERANK_SCALAR; /* what is this? */
+	
+	UA_Argument outputArgument;
+	UA_Argument_init(&outputArgument);
+	outputArgument.description = UA_LOCALIZEDTEXT("en-US", "A string, message that was sent");
+	outputArgument.name = UA_STRING("OutputMessage");
+	outputArgument.dataType = UA_TYPES[UA_TYPES_STRING].typeId;
+	outputArgument.valueRank = UA_VALUERANK_SCALAR; /* what is this? */
+	
+	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
+	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Reads the currently configured set");
+	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Read currently configured set");
+	sendAttr.executable = true;
+	sendAttr.userExecutable = true;
+	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 
+							*objectNodeId,
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
+                            UA_QUALIFIEDNAME(1, "ReadSet"),
+                            sendAttr, &readSetMethodCallback,
+                            1, &inputArgument, 1, &outputArgument, (void*)global, NULL);
+}
 
 static UA_StatusCode 
 sportSendMsgMethodCallback(UA_Server *server,
@@ -222,6 +381,7 @@ sportSendMsgMethodCallback(UA_Server *server,
 						 size_t inputSize, const UA_Variant *input,
                          size_t outputSize, UA_Variant *output)
 {
+	
 	/* initial declerations */
 	globalstructMC *global = (globalstructMC*)objectContext;
 	UA_String *inputStr = (UA_String*)input->data; 						/* message to be sent */
@@ -262,82 +422,12 @@ addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalst
 	sendAttr.executable = true;
 	sendAttr.userExecutable = true;
 	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 
-//							UA_NODEID_STRING(1, "SportSendMsg"),
-//							UA_NODEID_STRING(1, "MCId1"),					/* motor controller 1 as parent */
-//							UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), 	/* objectfolder as parent */
 							*objectNodeId,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
                             UA_QUALIFIEDNAME(1, "SportSendMsg"),
                             sendAttr, &sportSendMsgMethodCallback,
                             1, &inputArgument, 1, &outputArgument, (void*)global, NULL);
 }
-
-static UA_StatusCode 
-startMotorMethodCallback(UA_Server *server,
-                         const UA_NodeId *sessionId, void *sessionHandle,
-                         const UA_NodeId *methodId, void *methodContext,
-                         const UA_NodeId *objectId, void *objectContext,
-						 size_t inputSize, const UA_Variant *input,
-                         size_t outputSize, UA_Variant *output)
-{
-	globalstructMC *global = (globalstructMC*)objectContext;
-	
-	char msg[7];
-	memset(msg,0,strlen(msg));											/* empty message */
-	MCcommand(global->motorAddr, "A", NULL, msg);
-	printf("fyi start motor msg = %s \n", msg);
-	sport_send_msg(msg, global->fd);									/* send message */
-	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Start Motor was called");
-    return UA_STATUSCODE_GOOD;
-}
-
-static void
-addStartMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
-	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
-	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Start Motor with current set");
-	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Start Motor");
-	sendAttr.executable = true;
-	sendAttr.userExecutable = true;
-	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 *objectNodeId,
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
-                            UA_QUALIFIEDNAME(1, "StartMotorMethod"),
-                            sendAttr, &startMotorMethodCallback,
-                            0, NULL, 0, NULL, (void*)global, NULL);
-}
-
-static UA_StatusCode 
-stopMotorMethodCallback(UA_Server *server,
-                         const UA_NodeId *sessionId, void *sessionHandle,
-                         const UA_NodeId *methodId, void *methodContext,
-                         const UA_NodeId *objectId, void *objectContext,
-						 size_t inputSize, const UA_Variant *input,
-                         size_t outputSize, UA_Variant *output)
-{
-	globalstructMC *global = (globalstructMC*)objectContext;
-	
-	char msg[7];
-	memset(msg,0,strlen(msg));											/* empty message */
-	MCcommand(global->motorAddr, "S", NULL, msg);
-	printf("fyi stop motor msg = %s \n", msg);
-	sport_send_msg(msg, global->fd);									/* send message */
-	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Stop Motor was called");
-    return UA_STATUSCODE_GOOD;
-}
-
-static void
-addStopMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
-	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
-	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Stop Motor with current set");
-	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Stop Motor");
-	sendAttr.executable = true;
-	sendAttr.userExecutable = true;
-	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 *objectNodeId,
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
-                            UA_QUALIFIEDNAME(1, "StopMotorMethod"),
-                            sendAttr, &stopMotorMethodCallback,
-                            0, NULL, 0, NULL, (void*)global, NULL);
-}
-
 
 /************************/
 /* ADD OBJECT INSTANCES */
@@ -356,7 +446,8 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
                             motorControllerTypeId, /* this refers to the object type identifier */
                             oAttr, global, NULL);
 	/* add methods to object instance */
-	addSportSendMsgMethod(server, nodeId, global);
 	addStartMotorMethod(server, nodeId, global);
 	addStopMotorMethod(server, nodeId, global);
+	addSportSendMsgMethod(server, nodeId, global);
+	addReadSetMethod(server, nodeId, global);
 }

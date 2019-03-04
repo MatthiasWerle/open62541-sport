@@ -22,6 +22,7 @@
 #define SIZE_TTYNAME 50
 #define SIZE_MESSAGE 10
 //#define DEFAULT_TTYNAME
+#define READ_RESPONSE
 
 /*********************************/
 /* FUNCTIONS AND TYPEDEFINITIONS */
