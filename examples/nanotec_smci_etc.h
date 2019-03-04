@@ -229,10 +229,13 @@ sportSendMsgMethodCallback(UA_Server *server,
 	/* create message */ 
 	char msg[50];
 	char* cmd = (char*)inputStr->data;
-	MCcommand(global->motorAddr, cmd, NULL, msg);
-	/* send message */
-	sport_send_msg(msg, global->fd);
-
+	if ((int)strlen((char*)inputStr->data) > 0)
+	{
+		MCcommand(global->motorAddr, cmd, NULL, msg);				/* concatenate message */
+		sport_send_msg(msg, global->fd);							/* send message */
+	}
+	else
+		printf("can't send empty message \n");
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
     return UA_STATUSCODE_GOOD;
 }

@@ -101,11 +101,13 @@ static void *threadListen(void *vargp)
 		sport_send_msg(msg, (glob+0)->fd);
 	}
 #endif
-#ifdef READ_CONT
+
+#ifdef READ_CONT /* reads continuously on one filedescriptor */
+	int rdlen = 0; 
+	char buf[80];
 	while(1){
-		int rdlen = 0; 
-		char buf[80];
 		delay(100);
+		memset(buf, '\0', sizeof(buf));
 		rdlen = (int)read((glob+0)->fd , buf, sizeof(buf));
 		printf("received msg: rdlen = %d \n",rdlen);
 		printf("received msg: buf = %s \n\n", buf);
@@ -215,7 +217,6 @@ int main(int argc, char** argv)
 		/* set connection settings for serial port */
 		printf("Timeout for listing on %s is set to %d ms\n", global[i].ttyname, READ_TIMEOUT_MS);
 		set_interface_attribs(global[i].fd, BAUDRATE);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
-//		set_blocking(global[i].fd, 0);						/* set blocking for read off (0) */
 	}
 
 	/* Add Object Instances */

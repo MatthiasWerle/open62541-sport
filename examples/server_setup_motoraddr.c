@@ -69,7 +69,6 @@ int main(int argc, char** argv)
 	/* setup tty interface and assign userdefined motor addr */ 
 	setup_fd = set_fd(setup_ttyname);
 	set_interface_attribs(setup_fd, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
-//	set_blocking(setup_fd, 0);						/* set blocking for read off */
 
 	/* user info */
 	printf("setup_ttyname: %s\n", setup_ttyname);
