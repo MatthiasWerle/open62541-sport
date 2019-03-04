@@ -19,6 +19,10 @@
 
 #include "sport.h" 				/* serial port communication */
 
+#define SIZE_TTYNAME 50
+#define SIZE_MESSAGE 10
+//#define DEFAULT_TTYNAME
+
 /*********************************/
 /* FUNCTIONS AND TYPEDEFINITIONS */
 /*********************************/
@@ -41,17 +45,23 @@ int main(int argc, char** argv)
     UA_ServerConfig *config = UA_ServerConfig_new_default();
     UA_Server *server = UA_Server_new(config);
 
-	char* setup_ttyname = "/dev/ttyUSB0";
+	char setup_ttyname[SIZE_TTYNAME];
 	int setup_fd = -1;
 	char setup_motorAddr[3];
-	char setup_msg[10];
+	char setup_msg[SIZE_MESSAGE];
 
 	/* user prompt to define variables */
+#ifndef DEFAULT_TTYNAME
 	printf("Find out device file name e.g. with terminal command 'dmesg | grep tty'\n");
 	printf("Enter device file name (e.g. \"/dev/ttyUSB0\" for motor controller: ");
-//	fgets(setup_ttyname, 50, stdin);
+	fgets(setup_ttyname, 50, stdin);
+	setup_ttyname[strcspn(setup_ttyname, "\n")] = 0; /* delete the "\n" from fgets command at the end of the string */
+#else
+	strcpy(setup_ttyname, "/dev/ttyUSB0");
+#endif
 	printf("Enter motor adress for assignment (1...254): ");
 	fgets(setup_motorAddr, 3, stdin);;
+	setup_motorAddr[strcspn(setup_motorAddr, "\n")] = 0; /* delete the "\n" from fgets command at the end of the string */
 	strcpy(setup_msg, "#*m");
 	strcat(setup_msg, setup_motorAddr);
 	strcat(setup_msg, "\r");
@@ -59,7 +69,7 @@ int main(int argc, char** argv)
 	/* setup tty interface and assign userdefined motor addr */ 
 	setup_fd = set_fd(setup_ttyname);
 	set_interface_attribs(setup_fd, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
-	set_blocking(setup_fd, 0);						/* set blocking for read off */
+//	set_blocking(setup_fd, 0);						/* set blocking for read off */
 
 	/* user info */
 	printf("setup_ttyname: %s\n", setup_ttyname);

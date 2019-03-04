@@ -279,7 +279,7 @@ startMotorMethodCallback(UA_Server *server,
 {
 	globalstructMC *global = (globalstructMC*)objectContext;
 	
-	char msg[] = "test";
+	char msg[7];
 	memset(msg,0,strlen(msg));											/* empty message */
 	MCcommand(global->motorAddr, "A", NULL, msg);
 	printf("fyi start motor msg = %s \n", msg);
@@ -297,8 +297,41 @@ addStartMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstru
 	sendAttr.userExecutable = true;
 	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 *objectNodeId,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
-                            UA_QUALIFIEDNAME(1, "SportSendMsg"),
+                            UA_QUALIFIEDNAME(1, "StartMotorMethod"),
                             sendAttr, &startMotorMethodCallback,
+                            0, NULL, 0, NULL, (void*)global, NULL);
+}
+
+static UA_StatusCode 
+stopMotorMethodCallback(UA_Server *server,
+                         const UA_NodeId *sessionId, void *sessionHandle,
+                         const UA_NodeId *methodId, void *methodContext,
+                         const UA_NodeId *objectId, void *objectContext,
+						 size_t inputSize, const UA_Variant *input,
+                         size_t outputSize, UA_Variant *output)
+{
+	globalstructMC *global = (globalstructMC*)objectContext;
+	
+	char msg[7];
+	memset(msg,0,strlen(msg));											/* empty message */
+	MCcommand(global->motorAddr, "S", NULL, msg);
+	printf("fyi stop motor msg = %s \n", msg);
+	sport_send_msg(msg, global->fd);									/* send message */
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Stop Motor was called");
+    return UA_STATUSCODE_GOOD;
+}
+
+static void
+addStopMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
+	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
+	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Stop Motor with current set");
+	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Stop Motor");
+	sendAttr.executable = true;
+	sendAttr.userExecutable = true;
+	UA_Server_addMethodNode(server, UA_NODEID_NULL,	 *objectNodeId,
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
+                            UA_QUALIFIEDNAME(1, "StopMotorMethod"),
+                            sendAttr, &stopMotorMethodCallback,
                             0, NULL, 0, NULL, (void*)global, NULL);
 }
 
@@ -322,4 +355,5 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
 	/* add methods to object instance */
 	addSportSendMsgMethod(server, nodeId, global);
 	addStartMotorMethod(server, nodeId, global);
+	addStopMotorMethod(server, nodeId, global);
 }

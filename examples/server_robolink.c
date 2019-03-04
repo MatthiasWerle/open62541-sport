@@ -10,7 +10,7 @@
 #define DEFAULT_MOTORADDR
 //#define DEBUG_THREADTEST
 //#define READ_RESPONSE
-//#define READ_CONT
+#define READ_CONT
 
 /**********************/
 /* INCLUDED LIBRARIES */
@@ -88,9 +88,9 @@ static void *threadServer(void *vargp)
 static void *threadListen(void *vargp)
 {
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadListen started to supervise port communication");
-
-#ifdef DEBUG_THREADTEST
 	globalstructMC *glob = ((thread_args*)vargp)->global;
+	printf("fd = %d\n", (glob+0)->fd);
+#ifdef DEBUG_THREADTEST
 	char* msg = "#1A\r";
 	int j = 0;
 	while (1){
@@ -105,7 +105,8 @@ static void *threadListen(void *vargp)
 	while(1){
 		int rdlen = 0; 
 		char buf[80];
-		rdlen = (int)read(3 , buf, sizeof(buf));
+		delay(100);
+		rdlen = (int)read((glob+0)->fd , buf, sizeof(buf));
 		printf("received msg: rdlen = %d \n",rdlen);
 		printf("received msg: buf = %s \n\n", buf);
 		strcpy(buf, "");
@@ -214,7 +215,7 @@ int main(int argc, char** argv)
 		/* set connection settings for serial port */
 		printf("Timeout for listing on %s is set to %d ms\n", global[i].ttyname, READ_TIMEOUT_MS);
 		set_interface_attribs(global[i].fd, BAUDRATE);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
-		set_blocking(global[i].fd, 0);						/* set blocking for read off (0) */
+//		set_blocking(global[i].fd, 0);						/* set blocking for read off (0) */
 	}
 
 	/* Add Object Instances */
