@@ -59,12 +59,44 @@ set_interface_attribs(int fd, int speed)
 static int 
 sport_send_msg(char* msg, int fd)
 {
-	/* write message */
-    int wlen = (int)write(fd, msg, strlen(msg)); /* number of bytes written */
-	printf("\n sent msg = %s \n", msg);
-    if (wlen != (int)strlen(msg)) {
-        printf("Error %d from write: %s \n wlen= %d\n", errno, strerror(errno), wlen);
-    }
-    tcdrain(fd);    /* delay for output */
-    return (int)wlen;
+	if (fd != -1){
+		/* write message */
+		int wlen = (int)write(fd, msg, strlen(msg)); /* number of bytes written */
+		/* user info */
+		if (wlen != (int)strlen(msg)) {
+			printf("Error %d from write: %s \n wlen= %d\n", errno, strerror(errno), wlen);
+		}
+		else{
+			char msg_cut[strlen(msg)];
+			strcpy(msg_cut, msg);
+			msg_cut[strlen(msg)-1] = '\0';
+			printf("msg_cut = %s \n", msg_cut);
+			printf("\nsent %d bytes on fd %d as msg = \"%s\\r\" \n", (int)strlen(msg), fd, msg_cut);
+		}
+		tcdrain(fd);    /* delay for output */
+		return (int)wlen;
+	}
+	else{
+		printf("Error: bad filedescriptor \n");
+		return -1;
+	}
+}
+
+static int
+sport_read_msg(char* msg, int fd)
+{
+	if (fd != -1){
+		/* read answer */
+		char buf[80];
+		int rdlen = 0; 
+	//	size_t buflen = sizeof(buf);
+		memset(buf, '\0', sizeof(buf));
+		rdlen = (int)read(fd, buf, sizeof(buf));
+		strcpy(msg, buf);
+		return rdlen;
+	}
+	else{
+		printf("Error: bad filedescriptor \n");
+		return -1;
+	}
 }

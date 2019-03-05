@@ -11,6 +11,8 @@
 		int fd;																	/* file descriptor of tty port */
 		char motorAddr[SIZE_MOTORADDR];															/* preconfigured motor adress of nanotec stepper motor driver with integrated controller */
 		pthread_mutex_t *lock;
+		fd_set *readfds;
+		struct timeval *tv;
 	} globalstructMC;
 
 /* predefined identifier for later use */
@@ -176,7 +178,6 @@ motorControllerTypeConstructor(UA_Server *server,
     UA_BrowsePathResult_clear(&bpr);
 
     /* At this point we could replace the node context .. */
-
     return UA_STATUSCODE_GOOD;
 }
 
@@ -195,15 +196,11 @@ static void
 MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 {
 	memset(msg,0,strlen(msg));											/* empty message */
-	char valStr[15];
+	char valStr[20];
 	memset(valStr,0,strlen(valStr));											/* empty message */
 	if (valPtr != NULL){
-		printf("*valPtr = %d \n", *valPtr);
-		printf("before sprintf valStr = %s\n", valStr);
 		sprintf(valStr, "%d", *valPtr);
-		printf("after sprintf valStr = %s\n", valStr);
 	}
-	printf("after sprintf \n");
 	strcpy(msg,"#"); 													/* write start sign # to message */
 	strcat(msg, motorAddr);												/* append motor adress to message */
 	strcat(msg, cmd);													/* append command to message */
@@ -224,23 +221,23 @@ startMotorMethodCallback(UA_Server *server,
 {
 	globalstructMC *global = (globalstructMC*)objectContext;
 	
-	char msg[7];
-	memset(msg,0,strlen(msg));											/* empty message */
+	char msg[8];
+	memset(msg,0,sizeof(msg));											/* empty message */
 	MCcommand(global->motorAddr, "A", NULL, msg);
-	printf("fyi start motor msg = %s \n", msg);
+	printf("fyi start motor msg \"%s\" on fd = %d \n", msg, global->fd);
+	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
-
 #ifdef READ_RESPONSE
-	/* read answer */
-	int rdlen = 0; 
-	char buf[80];
-	memset(buf, '\0', sizeof(buf));
-	rdlen = (int)read(global->fd, buf, sizeof(buf));
-	printf("received msg: rdlen = %d \n",rdlen);
-	printf("received msg: buf = %s \n\n", buf);
-	memset(buf, '\0', sizeof(buf));
+	if (global->fd != -1){
+		global->tv->tv_sec = 0;
+		int ready = select(2, global->readfds, NULL, NULL, global->tv);
+		global->tv->tv_sec = READ_TIMEOUT_S;
+		if(ready > 0){
+			int rdlen = sport_read_msg(msg, global->fd);
+			printf("received msg: %d bytes in buf = \"%s\" \n\n", rdlen, msg);
+		}
+	}
 #endif
-
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Start Motor was called");
     return UA_STATUSCODE_GOOD;
 }
@@ -269,23 +266,16 @@ stopMotorMethodCallback(UA_Server *server,
 {
 	globalstructMC *global = (globalstructMC*)objectContext;
 	
-	char msg[7];
+	char msg[8];
 	memset(msg,0,strlen(msg));											/* empty message */
 	MCcommand(global->motorAddr, "S", NULL, msg);
-	printf("fyi stop motor msg = %s \n", msg);
+	printf("fyi stop motor msg \"%s\" on fd = %d \n", msg, global->fd);
+	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
-
 #ifdef READ_RESPONSE
-	/* read answer */
-	int rdlen = 0; 
-	char buf[80];
-	memset(buf, '\0', sizeof(buf));
-	rdlen = (int)read(global->fd, buf, sizeof(buf));
-	printf("received msg: rdlen = %d \n",rdlen);
-	printf("received msg: buf = %s \n\n", buf);
-	memset(buf, '\0', sizeof(buf));
+	int rdlen = sport_read_msg(msg, global->fd);
+	printf("received msg: %d bytes in buf = \"%s\" \n\n", rdlen, msg);
 #endif
-
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Stop Motor was called");
     return UA_STATUSCODE_GOOD;
 }
@@ -314,32 +304,24 @@ readSetMethodCallback(UA_Server *server,
 {
 	/* initial declerations */
 	globalstructMC *global = (globalstructMC*)objectContext;
-	char msg[8];												/* msg = "#<motorAddr>Z|\r" */
+	char msg[80];															/* msg = "#<motorAddr>Z|\r" */
 	char* cmd = "Z|";
-	MCcommand(global->motorAddr, cmd, NULL, msg);				/* concatenate message */
+	MCcommand(global->motorAddr, cmd, NULL, msg);							/* concatenate message */
 
     if (pthread_mutex_trylock(global->lock) != 0){
 		pthread_mutex_lock(global->lock);
 		printf("readSetMethod: locked mutex\n");
-
-		tcflush(global->fd, TCIFLUSH); 								/* flush input buffer */
-		sport_send_msg(msg, global->fd);							/* send message */
-
-		/* read answer */
-		int rdlen = 0; 
-		char buf[80];
-		memset(buf, '\0', sizeof(buf));
-		rdlen = (int)read(global->fd, buf, sizeof(buf));
-		printf("received msg: rdlen = %d \n",rdlen);
-		printf("received msg: buf = %s \n\n", buf);
-		UA_String tmp = UA_STRING_ALLOC(buf);
-		UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]);
-		pthread_mutex_unlock(global->lock);
+		tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
+		sport_send_msg(msg, global->fd);									/* send message */
+		int rdlen = sport_read_msg(msg, global->fd);						/* read answer */
+		printf("received msg: %d bytes in buf = %s \n\n", rdlen, msg);
+		UA_String tmp = UA_STRING_ALLOC(msg);
+		UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]); /* user output */
+		pthread_mutex_unlock(global->lock);	
 		printf("readSetMethod: unlocked mutex\n");
 	}
 	else
 		printf("couldn't use method, mutex was locked \n");
-
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Read Set was called");
     return UA_STATUSCODE_GOOD;
 }
@@ -381,23 +363,25 @@ sportSendMsgMethodCallback(UA_Server *server,
 						 size_t inputSize, const UA_Variant *input,
                          size_t outputSize, UA_Variant *output)
 {
-	
 	/* initial declerations */
 	globalstructMC *global = (globalstructMC*)objectContext;
-	UA_String *inputStr = (UA_String*)input->data; 						/* message to be sent */
-
-	/* create message */ 
-	char msg[50];
-	char* cmd = (char*)inputStr->data;
-	if ((int)strlen((char*)inputStr->data) > 0)
-	{
-		MCcommand(global->motorAddr, cmd, NULL, msg);				/* concatenate message */
-		sport_send_msg(msg, global->fd);							/* send message */
-	}
-	else
+	if((UA_Variant_isEmpty(input))){											/* WIP yet not working plausi check */
 		printf("can't send empty message \n");
-	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
-    return UA_STATUSCODE_GOOD;
+	}
+	else{
+		UA_String *inputStr = (UA_String*)input->data; 						/* message to be sent */
+		char* cmd = (char*)inputStr->data;
+		char msg[80];
+		MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
+		tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
+		sport_send_msg(msg, global->fd);									/* send message */
+		#ifdef READ_RESPONSE
+			int rdlen = sport_read_msg(msg, global->fd);
+			printf("received msg: %d bytes in buf = %s \n\n", rdlen, msg);
+		#endif
+		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
+	}
+	return UA_STATUSCODE_GOOD;
 }
 
 static void

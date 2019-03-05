@@ -76,7 +76,10 @@ int main(int argc, char** argv)
 	printf("derived setup_fd = %d\n", setup_fd);
 	printf("motor adress will be set to: %s\n", setup_motorAddr);
 
-	sport_send_msg(setup_msg, setup_fd);
+	tcflush(setup_fd, TCIFLUSH); 										/* flush input buffer */
+	sport_send_msg(setup_msg, setup_fd);									/* send message */
+	int rdlen = sport_read_msg(setup_msg, setup_fd);
+	printf("received msg: %d bytes in buf = %s \n\n", rdlen, setup_msg);
 
 	/* Run the server loop */
     UA_StatusCode status = UA_Server_run(server, &running);
