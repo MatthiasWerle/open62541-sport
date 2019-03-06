@@ -1,15 +1,11 @@
-#define DISPLAY_STRING
-
-
-
 /*****************************************/
 /* Add Motor Controller Object Instances */
 /*****************************************/
 /* typedef for global variable */
 	typedef struct {
-		char ttyname[SIZE_TTYNAME];															/* tty portname e.g. /dev/ttyUSB0 */
-		int fd;																	/* file descriptor of tty port */
-		char motorAddr[SIZE_MOTORADDR];															/* preconfigured motor adress of nanotec stepper motor driver with integrated controller */
+		char ttyname[SIZE_TTYNAME];														/* tty portname e.g. /dev/ttyUSB0 */
+		int fd;																			/* file descriptor of tty port */
+		char motorAddr[SIZE_MOTORADDR];													/* preconfigured motor adress of nanotec stepper motor driver with integrated controller */
 		pthread_mutex_t *lock;
 		fd_set *readfds;
 		struct timeval *tv;
@@ -22,9 +18,9 @@ static void
 defineObjectTypes(UA_Server *server) {
 	/* default values */
 	UA_String defmn = UA_STRING("Nanotec"); 											/* default manufacturer name */
-	UA_String defmodel = UA_STRING("SMCI47-S-2"); 									/* default model */
+	UA_String defmodel = UA_STRING("SMCI47-S-2"); 										/* default model */
 	/* default values placeholder */
-	UA_Int32 defInt = 161;															/* default variable */
+	UA_Int32 defInt = 161;																/* default variable: AntiFascistAction */
 
     /* Define the object type for "Device" */
     UA_ObjectTypeAttributes dtAttr = UA_ObjectTypeAttributes_default;
@@ -192,12 +188,12 @@ addMotorControllerTypeConstructor(UA_Server *server) {
 /* OTHER FUNCTIONS */
 /*******************/
 
-static void
+static UA_INLINE UA_StatusCode
 MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 {
 	memset(msg,0,strlen(msg));											/* empty message */
 	char valStr[20];
-	memset(valStr,0,strlen(valStr));											/* empty message */
+	memset(valStr,0,strlen(valStr)); 									/* empty message */
 	if (valPtr != NULL){
 		sprintf(valStr, "%d", *valPtr);
 	}
@@ -206,6 +202,7 @@ MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 	strcat(msg, cmd);													/* append command to message */
 	strcat(msg, valStr);												/* append value to message */
 	strcat(msg, "\r");													/* append end sign to message */
+	return UA_STATUSCODE_GOOD;
 }
 
 /*************************************/
@@ -222,9 +219,8 @@ startMotorMethodCallback(UA_Server *server,
 	globalstructMC *global = (globalstructMC*)objectContext;
 	
 	char msg[8];
-	memset(msg,0,sizeof(msg));											/* empty message */
-	MCcommand(global->motorAddr, "A", NULL, msg);
-	printf("fyi start motor msg \"%s\" on fd = %d \n", msg, global->fd);
+	memset(msg,0,sizeof(msg)); 											/* empty message */
+	MCcommand(global->motorAddr, "A", NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 #ifdef READ_RESPONSE
@@ -233,8 +229,7 @@ startMotorMethodCallback(UA_Server *server,
 		int ready = select(2, global->readfds, NULL, NULL, global->tv);
 		global->tv->tv_sec = READ_TIMEOUT_S;
 		if(ready > 0){
-			int rdlen = sport_read_msg(msg, global->fd);
-			printf("received msg: %d bytes in buf = \"%s\" \n\n", rdlen, msg);
+			sport_read_msg(msg, global->fd);
 		}
 	}
 #endif
@@ -265,16 +260,14 @@ stopMotorMethodCallback(UA_Server *server,
                          size_t outputSize, UA_Variant *output)
 {
 	globalstructMC *global = (globalstructMC*)objectContext;
-	
 	char msg[8];
-	memset(msg,0,strlen(msg));											/* empty message */
+	memset(msg,0,sizeof(msg));											/* empty message */
 	MCcommand(global->motorAddr, "S", NULL, msg);
 	printf("fyi stop motor msg \"%s\" on fd = %d \n", msg, global->fd);
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 #ifdef READ_RESPONSE
-	int rdlen = sport_read_msg(msg, global->fd);
-	printf("received msg: %d bytes in buf = \"%s\" \n\n", rdlen, msg);
+	sport_read_msg(msg, global->fd);
 #endif
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Stop Motor was called");
     return UA_STATUSCODE_GOOD;
@@ -302,29 +295,55 @@ readSetMethodCallback(UA_Server *server,
 						 size_t inputSize, const UA_Variant *input,
                          size_t outputSize, UA_Variant *output)
 {
+	printf("readSetMethodCallback ... \n");
 	/* initial declerations */
 	globalstructMC *global = (globalstructMC*)objectContext;
-	char msg[80];															/* msg = "#<motorAddr>Z|\r" */
-	char* cmd = "Z|";
-	MCcommand(global->motorAddr, cmd, NULL, msg);							/* concatenate message */
-
-    if (pthread_mutex_trylock(global->lock) != 0){
-		pthread_mutex_lock(global->lock);
+//    if (pthread_mutex_trylock(global->lock) != 0){
+//		pthread_mutex_lock(global->lock);								/* lock */
 		printf("readSetMethod: locked mutex\n");
-		tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
-		sport_send_msg(msg, global->fd);									/* send message */
-		int rdlen = sport_read_msg(msg, global->fd);						/* read answer */
-		printf("received msg: %d bytes in buf = %s \n\n", rdlen, msg);
+		/* send msg and receive response */
+		char msg[80];													/* empty message */
+		memset(msg,0,sizeof(msg));
+		char* cmd = "Z|";
+		MCcommand(global->motorAddr, cmd, NULL, msg);					/* concatenate message "#<motorAddr>Z|\r" */
+		tcflush(global->fd, TCIFLUSH); 									/* flush input buffer */
+		sport_send_msg(msg, global->fd);								/* send message */
+		sport_read_msg(msg, global->fd);								/* read response */
+//		pthread_mutex_unlock(global->lock);								/* unlock */
+		printf("readSetMethod: unlocked mutex\n");
+		/* prepare user output */
+#ifdef OUTPUT
+		int i=0;
+		char* ptrp = strchr(msg,"p")+2;
+		char* ptrs = strchr(msg,"s")+2;
+		char* ptru = strchr(msg,"u")+2;
+		char* ptro = strchr(msg,"o")+2;
+		char* ptrn = strchr(msg,"n")+2;
+		char* ptrb = strchr(msg,"b")+2;
+		char* ptrB = strchr(msg,"B")+2;
+		char* ptrd = strchr(msg,"d")+2;
+		char* ptrt = strchr(msg,"t")+2;
+		char* ptrW = strchr(msg,"W")+2;
+		char* ptrP = strchr(msg,"P")+2;
+		char* ptrN = strchr(msg,"N")+2;
+
+		for (i=0; i<strlen(msg); i++){
+		}
+#endif
 		UA_String tmp = UA_STRING_ALLOC(msg);
 		UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]); /* user output */
-		pthread_mutex_unlock(global->lock);	
-		printf("readSetMethod: unlocked mutex\n");
-	}
-	else
-		printf("couldn't use method, mutex was locked \n");
+//	}
+//	else{
+//		printf("couldn't use method, mutex was locked \n");
+//		return UA_STATUSCODE_BADUNEXPECTEDERROR;
+//	}
+
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Read Set was called");
     return UA_STATUSCODE_GOOD;
 }
+
+//1Zp+1s-400u+400o+1000n+1000b+2364B+0d+0t+0W+1P+0N+0
+
 
 static void
 addReadSetMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
@@ -365,20 +384,19 @@ sportSendMsgMethodCallback(UA_Server *server,
 {
 	/* initial declerations */
 	globalstructMC *global = (globalstructMC*)objectContext;
-	if((UA_Variant_isEmpty(input))){											/* WIP yet not working plausi check */
+	if((UA_Variant_isEmpty(input))){												/* WIP yet not working plausi check */
 		printf("can't send empty message \n");
 	}
 	else{
-		UA_String *inputStr = (UA_String*)input->data; 						/* message to be sent */
+		UA_String *inputStr = (UA_String*)input->data; 								/* message to be sent */
 		char* cmd = (char*)inputStr->data;
 		char msg[80];
-		MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
-		tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
-		sport_send_msg(msg, global->fd);									/* send message */
-		#ifdef READ_RESPONSE
-			int rdlen = sport_read_msg(msg, global->fd);
-			printf("received msg: %d bytes in buf = %s \n\n", rdlen, msg);
-		#endif
+		MCcommand(global->motorAddr, cmd, NULL, msg);								/* concatenate message */
+		tcflush(global->fd, TCIFLUSH); 												/* flush input buffer */
+		sport_send_msg(msg, global->fd);											/* send message */
+	#ifdef READ_RESPONSE
+		sport_read_msg(msg, global->fd);
+	#endif
 		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
 	}
 	return UA_STATUSCODE_GOOD;
@@ -427,8 +445,7 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
                             UA_QUALIFIEDNAME(1, name),
-                            motorControllerTypeId, /* this refers to the object type identifier */
-                            oAttr, global, NULL);
+                            motorControllerTypeId, oAttr, global, NULL);
 	/* add methods to object instance */
 	addStartMotorMethod(server, nodeId, global);
 	addStopMotorMethod(server, nodeId, global);

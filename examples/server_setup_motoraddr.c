@@ -68,7 +68,7 @@ int main(int argc, char** argv)
 	strcat(setup_msg, "\r");
 
 	/* setup tty interface and assign userdefined motor addr */ 
-	setup_fd = set_fd(setup_ttyname);
+	set_fd(setup_ttyname, &setup_fd);
 	set_interface_attribs(setup_fd, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
 
 	/* user info */
@@ -77,9 +77,8 @@ int main(int argc, char** argv)
 	printf("motor adress will be set to: %s\n", setup_motorAddr);
 
 	tcflush(setup_fd, TCIFLUSH); 										/* flush input buffer */
-	sport_send_msg(setup_msg, setup_fd);									/* send message */
-	int rdlen = sport_read_msg(setup_msg, setup_fd);
-	printf("received msg: %d bytes in buf = %s \n\n", rdlen, setup_msg);
+	sport_send_msg(setup_msg, setup_fd);								/* send message */
+	sport_read_msg(setup_msg, setup_fd);								/* read response */
 
 	/* Run the server loop */
     UA_StatusCode status = UA_Server_run(server, &running);

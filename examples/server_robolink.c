@@ -2,7 +2,7 @@
 /* GLOBAL PARAMETERS */
 /*********************/
 #define BAUDRATE B115200
-#define READ_TIMEOUT_S 10		/* reading timeout in s */
+#define READ_TIMEOUT_S 1		/* reading timeout in s */
 #define READ_TIMEOUT_US 0		/* reading timeout in us */
 #define SIZE_MOTORADDR 3		/* 3 bytes, for the string reaches from "1" to "255" */
 #define SIZE_TTYNAME 50
@@ -11,7 +11,7 @@
 #define DEFAULT_TTYNAME
 #define DEFAULT_MOTORADDR		/* ATTENTION: SERVER WILL HANG ITSELF UP IF THE WRONG MOTOR ADRESS IS CONFIGURED BECAUSE READ BLOCKS*/
 #define READ_RESPONSE
-//#define READ_CONT
+//#define READ_CONT				/* unfinished and */
 
 /**********************/
 /* INCLUDED LIBRARIES */
@@ -64,7 +64,6 @@ static void delay(int milli_seconds) {
 		UA_Boolean *running;
 		UA_StatusCode *status;
 		globalstructMC *global;
-		pthread_t threadReadMsgId;
 		fd_set *readfds;
 		struct timeval *tv;
 	} thread_args;
@@ -84,28 +83,6 @@ static void *threadServer(void *vargp){
 	return NULL;
 }
 
-static void *threadReadMsg(void *vargp){											/* at the moment totally useless thread */
-	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadReadMsg started to read buffered input message");
-#ifdef READ_RESPONSE
-	thread_args *argp = (thread_args*)vargp;
-	globalstructMC *glob = argp->global;
-    if (pthread_mutex_init((glob+0)->lock, NULL) == 0){
-		pthread_mutex_lock((glob+0)->lock);
-		printf("threadReadMsg: mutex locked\n");
-		printf("threadReadMsg: fd = %d\n", (glob+0)->fd);
-		char msg[80];
-		int rdlen = sport_read_msg(msg, (glob+0)->fd);								/* read message */
-		printf("received msg: %d bytes in buf = %s \n\n", rdlen, msg);
-		pthread_mutex_unlock((glob+0)->lock);
-		printf("threadReadMsg: mutex unlocked \n");
-	}
-	else{
-		printf("\n mutex init failed\n");
-	}
-#endif
-	return NULL;
-}
-
 static void *threadListen(void *vargp)
 {
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadListen started to supervise port communication");
@@ -122,8 +99,7 @@ static void *threadListen(void *vargp)
 			if (pthread_mutex_trylock((glob+0)->lock) != 0){
 				pthread_mutex_lock((glob+0)->lock);
 				printf("threadListen: mutex locked \n");
-				int rdlen = sport_read_msg(msg, (glob+0)->fd);	/* read message */
-				printf("received msg: %d bytes in buf = %s \n\n", rdlen, msg);
+				sport_read_msg(msg, (glob+0)->fd);	/* read message */
 				pthread_mutex_unlock((glob+0)->lock);
 				printf("threadListen: mutex unlocked \n");
 			}
@@ -161,18 +137,24 @@ int main(int argc, char** argv){
 
 	/* thread IDs */
 	pthread_t threadServerId;
-	pthread_t threadReadMsgId;
 	pthread_t threadListenId;
 	pthread_mutex_t lock[N_PORTS];
 
-	/* variables for select() to monitor multiple filedescriptors */
+	/* variables for select() to monitor multiple filedescriptors and prevent infinite loop during read() */
 	fd_set readfds;
 	fd_set readfds_single[N];							/* array with all fds from readfds as single fd sets in an array */
 	struct timeval tv;									/* set timeout for monitoring filedescriptors */
 		tv.tv_sec = READ_TIMEOUT_S;						/* timeout in s */
 		tv.tv_usec = READ_TIMEOUT_US;					/* timeout in microseconds */
-		printf("tv_sec = %ld, tv_usec = %ld \n", tv.tv_sec, tv.tv_usec);
-	
+	printf("tv_sec = %ld, tv_usec = %ld \n", tv.tv_sec, tv.tv_usec);
+
+
+//	int select_null, select_null2;
+//	select_null = select(2, NULL, NULL, NULL, &tv);		/* returns 0 */
+//	select_null2 = select(2, NULL, NULL, NULL, NULL); 	/* leads to hanging up, cause nothing to check and no timeout defined */
+//	printf("select_null = %d \n select_null2 = %d \n", select_null, select_null2);
+
+
 	/* declare tty names for every object instance */
 	for (i=0; i<N; i=i+1){
 		#ifdef DEFAULT_TTYNAME
@@ -232,7 +214,7 @@ int main(int argc, char** argv){
 	/* set filedescriptors, nodeIds for obj. instances, serial port connection configurations, */
 	for (i=0; i<N; i=i+1){
 		/* set filedescriptors in fd-set and in array struct variable global */
-		global[i].fd = set_fd(global[i].ttyname);			/* actually redundant because it'll be also contained in global[i].readfds WIP */
+		set_fd(global[i].ttyname, &(global[i].fd));			/* actually redundant because it'll be also contained in global[i].readfds WIP */
 		printf("global[i].fd = %d\n", global[i].fd);
 		FD_ZERO(&readfds_single[i]);							/* ATENTION! clear file descriptor set */
 		if(global[i].fd != -1){
@@ -282,12 +264,9 @@ int main(int argc, char** argv){
 
 	/* create multiple threads */
 	pthread_create(&threadServerId, NULL, threadServer, vargp);
-	sport_send_msg("#*$\r",3);
-	printf("create threadReadMsg\n");
-	pthread_create(&threadReadMsgId, NULL, threadReadMsg, vargp);
-	sport_send_msg("#*Z|\r",3);
-	printf("create threadListen\n");
+	printf("created threadServer\n");
 	pthread_create(&threadListenId, NULL, threadListen, vargp);
+	printf("created threadListen\n");
 	printf("created all threads\n");
 
 	pthread_mutex_destroy(lock);
