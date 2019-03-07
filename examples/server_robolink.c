@@ -239,7 +239,9 @@ int main(int argc, char** argv){
 	/* Add Object Instances */
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "define object types and add object instances");
     defineObjectTypes(server);
+#ifdef TYPECONSTRUCTOR
 	addMotorControllerTypeConstructor(server);	/* need this? initializes lifecycle?! */
+#endif
 	for (i=0; i<N; i=i+1){
 		namebrowse[i] = (char*)malloc(sizeof(char*) * 50);
 		strcpy(*(namebrowse+i), "motorController");

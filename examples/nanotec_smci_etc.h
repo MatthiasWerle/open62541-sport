@@ -19,8 +19,6 @@ defineObjectTypes(UA_Server *server) {
 	/* default values */
 	UA_String defmn = UA_STRING("Nanotec"); 											/* default manufacturer name */
 	UA_String defmodel = UA_STRING("SMCI47-S-2"); 										/* default model */
-	/* default values placeholder */
-	UA_Int32 defInt = 161;																/* default variable: AntiFascistAction */
 
     /* Define the object type for "Device" */
     UA_ObjectTypeAttributes dtAttr = UA_ObjectTypeAttributes_default;
@@ -72,73 +70,9 @@ defineObjectTypes(UA_Server *server) {
                                 deviceTypeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
                                 UA_QUALIFIEDNAME(1, "MotorControllerType"), ctAttr,
                                 NULL, NULL);
-
-	/* Status */
-    UA_VariableAttributes statusAttr = UA_VariableAttributes_default;
-    statusAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Status");
-    statusAttr.valueRank = UA_VALUERANK_SCALAR;
-    UA_NodeId statusId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "Status"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), statusAttr, NULL, &statusId);
-    /* Make the status variable mandatory */
-    UA_Server_addReference(server, statusId,
-                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
-                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
-
-	/* Step Resolution */
-    UA_VariableAttributes stepResAttr = UA_VariableAttributes_default;
-    stepResAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MotorStepResolution");
-//    stepResAttr.valueRank = UA_VALUERANK_SCALAR;
-	stepResAttr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-    stepResAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_Variant_setScalar(&stepResAttr.value, &defInt, &UA_TYPES[UA_TYPES_INT32]);
-	UA_NodeId stepResId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "MotorStepResolutions"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), stepResAttr, NULL, &stepResId);
-    /* Make the stepRes variable mandatory */
-    UA_Server_addReference(server, stepResId,
-                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
-                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
-
-	/* Step Frequency */
-    UA_VariableAttributes stepFreqAttr = UA_VariableAttributes_default;
-    stepFreqAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MotorStepFrequency");
-//    stepFreqAttr.valueRank = UA_VALUERANK_SCALAR;
-	stepFreqAttr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-    stepFreqAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_Variant_setScalar(&stepFreqAttr.value, &defInt, &UA_TYPES[UA_TYPES_INT32]);
-	UA_NodeId stepFreqId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "MotorStepFrequency"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), stepFreqAttr, NULL, &stepFreqId);
-    /* Make the stepFreq variable mandatory */
-    UA_Server_addReference(server, stepFreqId,
-                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
-                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
-
-	/* Device Address */
-    UA_VariableAttributes addrAttr = UA_VariableAttributes_default;
-    addrAttr.displayName = UA_LOCALIZEDTEXT("en-US", "Device adress");
-    addrAttr.valueRank = UA_VALUERANK_SCALAR;
-	addrAttr.dataType = UA_TYPES[UA_TYPES_INT32].typeId;
-    addrAttr.accessLevel = UA_ACCESSLEVELMASK_READ; 
-    UA_Variant_setScalar(&addrAttr.value, &defInt, &UA_TYPES[UA_TYPES_INT32]);
-	UA_NodeId addrId;
-    UA_Server_addVariableNode(server, UA_NODEID_NULL, motorControllerTypeId,
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                              UA_QUALIFIEDNAME(1, "addrId"),
-                              UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE), addrAttr, NULL, &addrId);
-    /* Make the device address variable mandatory */
-    UA_Server_addReference(server, addrId,
-                           UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
-                           UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
 }
 
+#ifdef TYPECONSTRUCTOR
 /* type constructor for controller type */
 static UA_StatusCode
 motorControllerTypeConstructor(UA_Server *server,
@@ -184,6 +118,7 @@ addMotorControllerTypeConstructor(UA_Server *server) {
     lifecycle.destructor = NULL;
     UA_Server_setNodeTypeLifecycle(server, motorControllerTypeId, lifecycle);
 }
+#endif
 
 /*******************/
 /* OTHER FUNCTIONS */
@@ -208,6 +143,8 @@ MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 /****************/
 /* DATA SOURCES */
 /****************/
+#define ANGLE
+#ifdef ANGLE
 static UA_StatusCode
 readCurrentAngle(UA_Server *server,
                 const UA_NodeId *sessionId, void *sessionContext,
@@ -221,7 +158,8 @@ readCurrentAngle(UA_Server *server,
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
-	UA_Int32 angle = atoi(msg+strlen(global->motorAddr)+2);				/* convert char* to int */
+	UA_Int32 angle = atoi(msg+strlen(global->motorAddr)+1);				/* convert char* to int */
+	
 	UA_Variant_setScalarCopy(&dataValue->value, &angle, &UA_TYPES[UA_TYPES_INT32]);
 	dataValue->hasValue = true;											/* probably obsolet? */
     return UA_STATUSCODE_GOOD;
@@ -232,7 +170,7 @@ writeCurrentAngle(UA_Server *server,
                  const UA_NodeId *sessionId, void *sessionContext,
                  const UA_NodeId *nodeId, void *nodeContext,
                  const UA_NumericRange *range, const UA_DataValue *dataValue) {
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Changing the system time is not implemented");
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Changing the angle like this is not implemented");
     return UA_STATUSCODE_BADINTERNALERROR;
 }
 
@@ -252,14 +190,6 @@ addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, gl
     UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
 
     UA_DataSource angleDataSource;
-//	UA_Boolean sourceTimeStamp;
-//	UA_DataValue *dataValue;
-//    timeDataSource.read = readCurrentAngle;
-//    timeDataSource.read = readCurrentAngle(server, 
-//				NULL, NULL, 
-//				NULL, (void*)global, 
-//				sourceTimeStamp, NULL,
-//				dataValue);
 	angleDataSource.read = readCurrentAngle;
 	angleDataSource.write = writeCurrentAngle;
     UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
@@ -267,7 +197,64 @@ addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, gl
                                         variableTypeNodeId, attr,
                                         angleDataSource, (void*)global, NULL);
 }
+#endif
 
+#define DEBUGGED
+#ifdef DEBUGGED
+static UA_StatusCode
+readCurrentStatus(UA_Server *server,
+                const UA_NodeId *sessionId, void *sessionContext,
+                const UA_NodeId *nodeId, void *nodeContext,
+                UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
+                UA_DataValue *dataValue) {
+	globalstructMC *global = (globalstructMC*)nodeContext;
+	char msg[30];
+	char* cmd = "$";
+	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
+	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
+	sport_send_msg(msg, global->fd);									/* send message */
+	sport_read_msg(msg, global->fd);									/* read response */
+
+	UA_Int32 status = atoi(strpbrk(msg, "$")+1);				/* convert char* to int */
+	
+	UA_Variant_setScalarCopy(&dataValue->value, &status, &UA_TYPES[UA_TYPES_INT32]);
+	dataValue->hasValue = true;											/* probably obsolet? */
+    return UA_STATUSCODE_GOOD;
+}
+
+static UA_StatusCode
+writeCurrentStatus(UA_Server *server,
+                 const UA_NodeId *sessionId, void *sessionContext,
+                 const UA_NodeId *nodeId, void *nodeContext,
+                 const UA_NumericRange *range, const UA_DataValue *dataValue) {
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Changing the angle like this is not implemented");
+    return UA_STATUSCODE_BADINTERNALERROR;
+}
+
+static void
+addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
+	char name[50];
+	strcpy(name, (char*)((*nodeId).identifier.string.data));
+	strcat(name, "-current-status-datasource");
+
+    UA_VariableAttributes attr = UA_VariableAttributes_default;
+    attr.displayName = UA_LOCALIZEDTEXT("en-US", "Current status - data source");
+    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+
+    UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
+    UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
+    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
+    UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
+
+    UA_DataSource statusDataSource;
+	statusDataSource.read = readCurrentStatus;
+	statusDataSource.write = writeCurrentStatus;
+    UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
+                                        parentReferenceNodeId, currentName,
+                                        variableTypeNodeId, attr,
+                                        statusDataSource, (void*)global, NULL);
+}
+#endif
 /*************************************/
 /* CALLBACK METHODS FOR OBJECT NODES */
 /*************************************/
@@ -550,5 +537,10 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
 	addStopMotorMethod(server, nodeId, global);
 	addSportSendMsgMethod(server, nodeId, global);
 	addReadSetMethod(server, nodeId, global);
+#ifdef ANGLE
 	addCurrentAngleDataSourceVariable(server, nodeId, global);
+#endif
+#ifdef DEBUGGED
+	addCurrentStatusDataSourceVariable(server, nodeId, global);
+#endif
 }
