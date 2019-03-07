@@ -55,6 +55,7 @@ set_interface_attribs(int fd, int speed)
 /* RECEIVE AND SEND MESSAGES ON SERIAL PORT */
 /*******************************************/
 
+/* WIP: Implement select() to check if message can be sent already similar to sport_read_msg() use of select() */
 static UA_INLINE UA_StatusCode 
 sport_send_msg(char* msg, int fd)
 {
@@ -86,38 +87,38 @@ sport_read_msg(char* msg, int fd)
 {
 	if (fd != -1){
 		/* check buffer */
-//		int ready;
-//		fd_set readfds;
-//	#if defined(READ_TIMEOUT_S) && defined(READ_TIMEOUT_US)
-//		struct timeval tv = {READ_TIMEOUT_S, READ_TIMEOUT_US};
-//	#else 
-//		struct timeval tv = {0, 0};
-//	#endif
-//		FD_ZERO(&readfds);
-//		FD_SET(fd, &readfds);
-//		ready = select(2, &readfds, NULL, NULL, &tv);
-//		if (ready > 0){
+		int ready;
+	#if defined(READ_TIMEOUT_S) && defined(READ_TIMEOUT_US)
+		struct timeval tv = {READ_TIMEOUT_S, READ_TIMEOUT_US};
+	#else
+		struct timeval tv = {0, 10}; 																		/* Timeout in Sekunden, in micro-Sekunden */
+	#endif
+		fd_set readfds;
+		FD_ZERO(&readfds);
+		FD_SET(fd, &readfds);
+		ready = select(fd+1, &readfds, NULL, NULL, &tv);
+		if(ready > 0){
 			/* read answer */
 			char buf[80];
 			memset(buf, '\0', sizeof(buf));
-			int rdlen = (int)read(fd, buf, sizeof(buf));														/* number of bytes read */
+			int rdlen = (int)read(fd, buf, sizeof(buf));													/* number of bytes read */
 			/* user info */
 			char msg_cut[strlen(buf)];
 			memset(msg, '\0', strlen(msg));
 			strcpy(msg, buf);
 			strcpy(msg_cut, msg);
-			msg_cut[strlen(msg)-2] = '\0';																	/* cut out the LFCR which was converted from the received CR due to tty settings at the end of the message */
-			printf("received msg: %d bytes on fd %d in buf = \"%s\\r\" \n", rdlen, fd, msg_cut); /* show the message in the original form with the CR */
+			msg_cut[strlen(msg)-1] = '\0';																	/* cut out the LFCR which was converted from the received CR due to tty settings at the end of the message */
+			printf("received msg: %d bytes on fd %d in buf = \"%s\\r\" \n", rdlen, fd, msg_cut); 			/* show the message in the original form with the CR */
 			return UA_STATUSCODE_GOOD;
-//		}
-//		else if(ready == -1){
-//			printf("Error %d from select: %s \n", errno, strerror(errno));
-//			return UA_STATUSCODE_BADUNEXPECTEDERROR;
-//		}
-//		else{
-//			printf("Timeout, nothing to read in buffer \n");
-//			return UA_STATUSCODE_BADUNEXPECTEDERROR;
-//		}
+		}
+		if(ready == 0){
+			printf("Timeout, nothing to read in buffer \n");
+			return UA_STATUSCODE_BADUNEXPECTEDERROR;
+		}
+		else { /* eg. ready == -1 */
+			printf("Error %d from select: %s \n", errno, strerror(errno));
+			return UA_STATUSCODE_BADUNEXPECTEDERROR;
+		}
 	}
 	else{
 		printf("Error: bad filedescriptor \n");

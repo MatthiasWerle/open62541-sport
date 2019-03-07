@@ -3,7 +3,7 @@
 /*********************/
 #define BAUDRATE B115200
 #define READ_TIMEOUT_S 1		/* reading timeout in s */
-#define READ_TIMEOUT_US 0		/* reading timeout in us */
+#define READ_TIMEOUT_US 1000		/* reading timeout in us */
 #define SIZE_MOTORADDR 3		/* 3 bytes, for the string reaches from "1" to "255" */
 #define SIZE_TTYNAME 50
 #define N 3 					/* max. number of motor controllers */
@@ -96,18 +96,16 @@ static void *threadListen(void *vargp)
 		ready = select(N_PORTS+1, argp->readfds, NULL, NULL, argp->tv);
 		argp->tv->tv_sec = READ_TIMEOUT_S;
 		if (ready > 0){
-			if (pthread_mutex_trylock((glob+0)->lock) != 0){
-				pthread_mutex_lock((glob+0)->lock);
-				printf("threadListen: mutex locked \n");
-				sport_read_msg(msg, (glob+0)->fd);	/* read message */
-				pthread_mutex_unlock((glob+0)->lock);
-				printf("threadListen: mutex unlocked \n");
-			}
+			pthread_mutex_lock((glob+0)->lock);
+			printf("threadListen: mutex locked \n");
+			sport_read_msg(msg, (glob+0)->fd);	/* read message */
+			pthread_mutex_unlock((glob+0)->lock);
+			printf("threadListen: mutex unlocked \n");
 		}
 		else if(ready == -1)
 			printf("Error from select(): %s \n", strerror(errno));
-		else /* ready == 0 */
-			printf("Timeout from select() after %d s\n", READ_TIMEOUT_S);
+//		else /* if ready == 0 */
+//			printf("Timeout from select() after %d s\n", READ_TIMEOUT_S);
 	}
 #endif
 	return NULL;
