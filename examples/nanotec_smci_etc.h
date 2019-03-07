@@ -143,8 +143,6 @@ MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 /****************/
 /* DATA SOURCES */
 /****************/
-#define ANGLE
-#ifdef ANGLE
 static UA_StatusCode
 readCurrentAngle(UA_Server *server,
                 const UA_NodeId *sessionId, void *sessionContext,
@@ -153,8 +151,7 @@ readCurrentAngle(UA_Server *server,
                 UA_DataValue *dataValue) {
 	globalstructMC *global = (globalstructMC*)nodeContext;
 	char msg[30];
-	char* cmd = "C";
-	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
+	MCcommand(global->motorAddr, "C", NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
@@ -170,6 +167,27 @@ writeCurrentAngle(UA_Server *server,
                  const UA_NodeId *sessionId, void *sessionContext,
                  const UA_NodeId *nodeId, void *nodeContext,
                  const UA_NumericRange *range, const UA_DataValue *dataValue) {
+	globalstructMC *global = (globalstructMC*)nodeContext;
+	char msg[30];
+	char positionstr[10];
+	char cmd[11] = "s";
+	int* position = (int*)dataValue->value.data;
+	sprintf(positionstr, "%d", *position);
+	strcat(cmd, positionstr);
+	MCcommand(global->motorAddr, "p2", NULL, msg);
+	sport_send_msg(msg, global->fd);									/* config: positioning mode absolute */
+	MCcommand(global->motorAddr, cmd, NULL, msg);
+	sport_send_msg(msg, global->fd);									/* config: traverse path to input position*/
+	MCcommand(global->motorAddr, "d1", NULL, msg);
+	sport_send_msg(msg, global->fd);									/* config: turn direction forward */
+	MCcommand(global->motorAddr, "W0", NULL, msg);
+	sport_send_msg(msg, global->fd);									/* config: no repeats of configured set */
+	MCcommand(global->motorAddr, "N0", NULL, msg);
+	sport_send_msg(msg, global->fd);									/* config: no following set to be performed */
+	MCcommand(global->motorAddr, "A", NULL, msg);
+	sport_send_msg(msg, global->fd);									/* Start Motor */
+	
+
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Changing the angle like this is not implemented");
     return UA_STATUSCODE_BADINTERNALERROR;
 }
@@ -197,10 +215,7 @@ addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, gl
                                         variableTypeNodeId, attr,
                                         angleDataSource, (void*)global, NULL);
 }
-#endif
 
-#define DEBUGGED
-#ifdef DEBUGGED
 static UA_StatusCode
 readCurrentStatus(UA_Server *server,
                 const UA_NodeId *sessionId, void *sessionContext,
@@ -209,8 +224,7 @@ readCurrentStatus(UA_Server *server,
                 UA_DataValue *dataValue) {
 	globalstructMC *global = (globalstructMC*)nodeContext;
 	char msg[30];
-	char* cmd = "$";
-	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
+	MCcommand(global->motorAddr, "$", NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
@@ -222,15 +236,6 @@ readCurrentStatus(UA_Server *server,
     return UA_STATUSCODE_GOOD;
 }
 
-static UA_StatusCode
-writeCurrentStatus(UA_Server *server,
-                 const UA_NodeId *sessionId, void *sessionContext,
-                 const UA_NodeId *nodeId, void *nodeContext,
-                 const UA_NumericRange *range, const UA_DataValue *dataValue) {
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Changing the angle like this is not implemented");
-    return UA_STATUSCODE_BADINTERNALERROR;
-}
-
 static void
 addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
 	char name[50];
@@ -239,7 +244,7 @@ addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, g
 
     UA_VariableAttributes attr = UA_VariableAttributes_default;
     attr.displayName = UA_LOCALIZEDTEXT("en-US", "Current status - data source");
-    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+    attr.accessLevel = UA_ACCESSLEVELMASK_READ;
 
     UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
     UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
@@ -248,13 +253,12 @@ addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, g
 
     UA_DataSource statusDataSource;
 	statusDataSource.read = readCurrentStatus;
-	statusDataSource.write = writeCurrentStatus;
     UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
                                         parentReferenceNodeId, currentName,
                                         variableTypeNodeId, attr,
                                         statusDataSource, (void*)global, NULL);
 }
-#endif
+
 /*************************************/
 /* CALLBACK METHODS FOR OBJECT NODES */
 /*************************************/
@@ -463,19 +467,13 @@ sportSendMsgMethodCallback(UA_Server *server,
 {
 	/* initial declerations */
 	globalstructMC *global = (globalstructMC*)objectContext;
-	UA_String *inputStr = (UA_String*)input->data; 								/* message to be sent */
-	if(inputStr->length > 0 ){												/* WIP yet not working plausi check */
-		printf("A\n");
-		printf("B\n");
-		printf("*inputStr.length = %ld\n", inputStr->length);
-		printf("*inputStr.data = %s\n", inputStr->data);
+	UA_String *inputStr = (UA_String*)input->data; 									/* message to be sent */
+	if(inputStr->length > 0 ){
 		char* cmd = (char*)inputStr->data;
 		char msg[80];
 		MCcommand(global->motorAddr, cmd, NULL, msg);								/* concatenate message */
 		tcflush(global->fd, TCIFLUSH); 												/* flush input buffer */
-		printf("C\n");
 		sport_send_msg(msg, global->fd);											/* send message */
-		printf("D\n");
 	#ifdef READ_RESPONSE
 		sport_read_msg(msg, global->fd);
 	#endif
@@ -483,7 +481,7 @@ sportSendMsgMethodCallback(UA_Server *server,
 		return UA_STATUSCODE_GOOD;
 	}
 	else{
-		printf("can't send empty message \n");
+		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called, but empty messages can't be sent");
 		return UA_STATUSCODE_BADUNEXPECTEDERROR;
 	}
 }
@@ -537,10 +535,6 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
 	addStopMotorMethod(server, nodeId, global);
 	addSportSendMsgMethod(server, nodeId, global);
 	addReadSetMethod(server, nodeId, global);
-#ifdef ANGLE
 	addCurrentAngleDataSourceVariable(server, nodeId, global);
-#endif
-#ifdef DEBUGGED
 	addCurrentStatusDataSourceVariable(server, nodeId, global);
-#endif
 }
