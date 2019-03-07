@@ -33,7 +33,7 @@ defineObjectTypes(UA_Server *server) {
     UA_Server_addReference(server, deviceTypeId,
                            UA_NODEID_NUMERIC(0, UA_NS0ID_HASMODELLINGRULE),
                            UA_EXPANDEDNODEID_NUMERIC(0, UA_NS0ID_MODELLINGRULE_MANDATORY), true);
-						   
+   
 	/* Manufacturer Name */
     UA_VariableAttributes mnAttr = UA_VariableAttributes_default;
     mnAttr.displayName = UA_LOCALIZEDTEXT("en-US", "ManufacturerName");
@@ -143,6 +143,7 @@ MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 /****************/
 /* DATA SOURCES */
 /****************/
+#ifdef DATASOURCE_ANGLE
 static UA_StatusCode
 readCurrentAngle(UA_Server *server,
                 const UA_NodeId *sessionId, void *sessionContext,
@@ -186,9 +187,8 @@ writeCurrentAngle(UA_Server *server,
 	sport_send_msg(msg, global->fd);									/* config: no following set to be performed */
 	MCcommand(global->motorAddr, "A", NULL, msg);
 	sport_send_msg(msg, global->fd);									/* Start Motor */
-	
 
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Changing the angle like this is not implemented");
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Motor starts and moves to configured angle position");
     return UA_STATUSCODE_BADINTERNALERROR;
 }
 
@@ -215,6 +215,7 @@ addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, gl
                                         variableTypeNodeId, attr,
                                         angleDataSource, (void*)global, NULL);
 }
+#endif
 
 static UA_StatusCode
 readCurrentStatus(UA_Server *server,
@@ -412,6 +413,8 @@ readSetMethodCallback(UA_Server *server,
 		printf("strP = %s\n", strP);
 		printf("strN = %s\n", strN);
 #endif
+		if (msg[0] == '\0')
+			strcpy(msg, "couln't read, probably READ_TIMEOUT_ was set to short or some other error");
 		UA_String tmp = UA_STRING_ALLOC(msg);
 		UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]); /* user output */
 //	}
@@ -535,6 +538,8 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
 	addStopMotorMethod(server, nodeId, global);
 	addSportSendMsgMethod(server, nodeId, global);
 	addReadSetMethod(server, nodeId, global);
+#ifdef DATASOURCE_ANGLE
 	addCurrentAngleDataSourceVariable(server, nodeId, global);
+#endif
 	addCurrentStatusDataSourceVariable(server, nodeId, global);
 }

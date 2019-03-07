@@ -2,16 +2,19 @@
 /* GLOBAL PARAMETERS */
 /*********************/
 #define BAUDRATE B115200
-#define READ_TIMEOUT_S 1		/* reading timeout in s */
-#define READ_TIMEOUT_US 1000		/* reading timeout in us */
+#define READ_TIMEOUT_S 0		/* reading timeout in s */
+#define READ_TIMEOUT_US 100000	/* reading timeout in us, should be greater than 100000 otherwise segmentation faults could happen with Read currently configured set callback method */
 #define SIZE_MOTORADDR 3		/* 3 bytes, for the string reaches from "1" to "255" */
 #define SIZE_TTYNAME 50
 #define N 3 					/* max. number of motor controllers */
 #define N_PORTS 1				/* number of ports, either 1 or N (1 if all motor controllers are connected to the same port or N if each controller is connected to a single port) */
+
+/* following definitions are options which can be commented out */
 #define DEFAULT_TTYNAME
 #define DEFAULT_MOTORADDR		/* ATTENTION: SERVER WILL HANG ITSELF UP IF THE WRONG MOTOR ADRESS IS CONFIGURED BECAUSE READ BLOCKS*/
 #define READ_RESPONSE
-//#define READ_CONT				/* unfinished and */
+//#define READ_CONT				/* no purpose yet */
+//#define DATASOURCE_ANGLE		/* WIP: Buggy, does not allow relative positioning anymore */
 
 /**********************/
 /* INCLUDED LIBRARIES */
@@ -213,7 +216,7 @@ int main(int argc, char** argv){
 	for (i=0; i<N; i=i+1){
 		/* set filedescriptors in fd-set and in array struct variable global */
 		set_fd(global[i].ttyname, &(global[i].fd));			/* actually redundant because it'll be also contained in global[i].readfds WIP */
-		printf("global[i].fd = %d\n", global[i].fd);
+		printf("global[%d].fd = %d\n", i, global[i].fd);
 		FD_ZERO(&readfds_single[i]);							/* ATENTION! clear file descriptor set */
 		if(global[i].fd != -1){
 			FD_SET(global[i].fd, &readfds_single[i]);			/* ATTENTION! fd set of single fd for global struct assigend to a single motor controller object instance */
