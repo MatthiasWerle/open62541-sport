@@ -435,7 +435,6 @@ readSetMethodCallback(UA_Server *server,
     return UA_STATUSCODE_GOOD;
 }
 
-//1Zp+1s-400u+400o+1000n+1000b+2364B+0d+0t+0W+1P+0N+0
 
 
 static void
@@ -477,22 +476,29 @@ sportSendMsgMethodCallback(UA_Server *server,
 {
 	/* initial declerations */
 	globalstructMC *global = (globalstructMC*)objectContext;
-	if((UA_Variant_isEmpty(input))){												/* WIP yet not working plausi check */
-		printf("can't send empty message \n");
-	}
-	else{
-		UA_String *inputStr = (UA_String*)input->data; 								/* message to be sent */
+	UA_String *inputStr = (UA_String*)input->data; 								/* message to be sent */
+	if(inputStr->length > 0 ){												/* WIP yet not working plausi check */
+		printf("A\n");
+		printf("B\n");
+		printf("*inputStr.length = %ld\n", inputStr->length);
+		printf("*inputStr.data = %s\n", inputStr->data);
 		char* cmd = (char*)inputStr->data;
 		char msg[80];
 		MCcommand(global->motorAddr, cmd, NULL, msg);								/* concatenate message */
 		tcflush(global->fd, TCIFLUSH); 												/* flush input buffer */
+		printf("C\n");
 		sport_send_msg(msg, global->fd);											/* send message */
+		printf("D\n");
 	#ifdef READ_RESPONSE
 		sport_read_msg(msg, global->fd);
 	#endif
 		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
+		return UA_STATUSCODE_GOOD;
 	}
-	return UA_STATUSCODE_GOOD;
+	else{
+		printf("can't send empty message \n");
+		return UA_STATUSCODE_BADUNEXPECTEDERROR;
+	}
 }
 
 static void
