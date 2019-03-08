@@ -6,7 +6,7 @@
 #define READ_TIMEOUT_US 100000	/* reading timeout in us, should be greater than 100000 otherwise segmentation faults could happen with Read currently configured set callback method */
 #define SIZE_MOTORADDR 3		/* 3 bytes, for the string reaches from "1" to "255" */
 #define SIZE_TTYNAME 50
-#define N 3 					/* max. number of motor controllers */
+#define N_MOTORCONTROLLERS 3 					/* max. number of motor controllers */
 #define N_PORTS 1				/* number of ports, either 1 or N (1 if all motor controllers are connected to the same port or N if each controller is connected to a single port) */
 
 /* following definitions are options which can be commented out */
@@ -14,7 +14,8 @@
 #define DEFAULT_MOTORADDR		/* ATTENTION: SERVER WILL HANG ITSELF UP IF THE WRONG MOTOR ADRESS IS CONFIGURED BECAUSE READ BLOCKS*/
 #define READ_RESPONSE
 //#define READ_CONT				/* no purpose yet */
-//#define DATASOURCE_ANGLE		/* WIP: Buggy, does not allow relative positioning anymore */
+#define DATASOURCE_ANGLE		/* WIP: Buggy, does not allow relative positioning anymore */
+#define DATASOURCE_POSITIONMODE
 
 /**********************/
 /* INCLUDED LIBRARIES */
@@ -133,8 +134,8 @@ int main(int argc, char** argv){
 	char **namebrowse = NULL;
 	char **namenr = NULL;
 
-	UA_NodeId nodeIdMC[N];								/* Array of NodeId's for every Motor Controller Object Instance */
-	globalstructMC global[N];							/* array of structs where each element is assigned to one object instace, defined in nanotec_smci_etc.h */
+	UA_NodeId nodeIdMC[N_MOTORCONTROLLERS];								/* Array of NodeId's for every Motor Controller Object Instance */
+	globalstructMC global[N_MOTORCONTROLLERS];							/* array of structs where each element is assigned to one object instace, defined in nanotec_smci_etc.h */
 
 	/* thread IDs */
 	pthread_t threadServerId;
@@ -143,7 +144,7 @@ int main(int argc, char** argv){
 
 	/* variables for select() to monitor multiple filedescriptors and prevent infinite loop during read() */
 	fd_set readfds;
-	fd_set readfds_single[N];							/* array with all fds from readfds as single fd sets in an array */
+	fd_set readfds_single[N_MOTORCONTROLLERS];							/* array with all fds from readfds as single fd sets in an array */
 	struct timeval tv;									/* set timeout for monitoring filedescriptors */
 		tv.tv_sec = READ_TIMEOUT_S;						/* timeout in s */
 		tv.tv_usec = READ_TIMEOUT_US;					/* timeout in microseconds */
@@ -157,19 +158,19 @@ int main(int argc, char** argv){
 
 
 	/* declare tty names for every object instance */
-	for (i=0; i<N; i=i+1){
+	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		#ifdef DEFAULT_TTYNAME
 			#if (N_PORTS == 1)							/* each motor controller connected to same port */
 				strcpy(global[i].ttyname, "/dev/ttyUSB0");
 			#endif
-			#if (N_PORTS == N) 							/* each motor controller connected to own port */
+			#if (N_PORTS == N_MOTORCONTROLLERS) 							/* each motor controller connected to own port */
 				char ttyname_tmp[SIZE_TTYNAME];
 				sprintf(ttyname_tmp, "/dev/ttyUSB%d", i);
 				strcpy(global[i].ttyname, ttyname_tmp);
 			#endif
-			#if (N_PORTS != N && N_PORTS != 1)
+			#if (N_PORTS != N_MOTORCONTROLLERS && N_PORTS != 1)
 				printf("N_PORTS = %d\n", N_PORTS);
-				printf("irregular number of motorcontrollers (N) or ports (N_PORTS)\n");
+				printf("irregular number of motorcontrollers (N_MOTORCONTROLLERS) or ports (N_PORTS)\n");
 			#endif
 		#endif
 		#ifndef DEFAULT_TTYNAME
@@ -180,11 +181,11 @@ int main(int argc, char** argv){
 	}
 
 	/* WIP declare lock for every ttyname */
-	for (i=0; i<N; i=i+1){
+	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		#if (N_PORTS == 1)
 			global[i].lock = &(lock[0]);
 		#endif
-		#if (N_PORTS == N) 
+		#if (N_PORTS == N_MOTORCONTROLLERS) 
 			global[i].lock = &(lock[i]);
 		#endif
 	}
@@ -194,7 +195,7 @@ int main(int argc, char** argv){
 		printf("FYI: individual motor adresses for MotorController range from 1 to 254 \n");
 		printf("FYI: broadcast motor adress is \"*\" \n");
 	#endif
-	for (i=0; i<N; i=i+1){
+	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		sprintf(global[i].motorAddr, "%d", i+1);
 		#ifndef DEFAULT_MOTORADDR
 			printf("FYI: individual motor adresses for MotorController range from 1 to 254 \n");
@@ -207,15 +208,15 @@ int main(int argc, char** argv){
 	printf("\n");
 
 	/* clear variables */
-	nameid = (char**)malloc(sizeof(**nameid)*N);			/* pointer to string with name of later used motor controller obj instance nodeId's */
-	namebrowse = (char**)malloc(sizeof(**nameid)*N);		/* pointer to string with name of later used browsenames */
-	namenr = (char**)malloc(sizeof(**nameid)*N);			/* pointer to string with name of later used number to generate nodeId's name */
+	nameid = (char**)malloc(sizeof(**nameid)*N_MOTORCONTROLLERS);			/* pointer to string with name of later used motor controller obj instance nodeId's */
+	namebrowse = (char**)malloc(sizeof(**nameid)*N_MOTORCONTROLLERS);		/* pointer to string with name of later used browsenames */
+	namenr = (char**)malloc(sizeof(**nameid)*N_MOTORCONTROLLERS);			/* pointer to string with name of later used number to generate nodeId's name */
 
 	FD_ZERO(&readfds);										/* clear file descriptor set */
 	/* set filedescriptors, nodeIds for obj. instances, serial port connection configurations, */
-	for (i=0; i<N; i=i+1){
+	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		/* set filedescriptors in fd-set and in array struct variable global */
-		set_fd(global[i].ttyname, &(global[i].fd));			/* actually redundant because it'll be also contained in global[i].readfds WIP */
+		get_fd(global[i].ttyname, &(global[i].fd));			/* actually redundant because it'll be also contained in global[i].readfds WIP */
 		printf("global[%d].fd = %d\n", i, global[i].fd);
 		FD_ZERO(&readfds_single[i]);							/* ATENTION! clear file descriptor set */
 		if(global[i].fd != -1){
@@ -245,7 +246,7 @@ int main(int argc, char** argv){
 #ifdef TYPECONSTRUCTOR
 	addMotorControllerTypeConstructor(server);	/* need this? initializes lifecycle?! */
 #endif
-	for (i=0; i<N; i=i+1){
+	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		namebrowse[i] = (char*)malloc(sizeof(char*) * 50);
 		strcpy(*(namebrowse+i), "motorController");
 		sprintf(*(namenr+i), "%d", i+1);

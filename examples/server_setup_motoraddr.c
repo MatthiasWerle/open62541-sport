@@ -48,7 +48,7 @@ int main(int argc, char** argv)
 
 	char setup_ttyname[SIZE_TTYNAME];
 	int setup_fd = -1;
-	char setup_motorAddr[3];
+	char setup_motorAddr[4];
 	char setup_msg[SIZE_MESSAGE];
 
 	/* user prompt to define variables */
@@ -61,25 +61,28 @@ int main(int argc, char** argv)
 	strcpy(setup_ttyname, "/dev/ttyUSB0");
 #endif
 	printf("Enter motor adress for assignment (1...254): ");
-	fgets(setup_motorAddr, 3, stdin);;
+	fgets(setup_motorAddr, 4, stdin);
 	setup_motorAddr[strcspn(setup_motorAddr, "\n")] = 0; /* delete the "\n" from fgets command at the end of the string */
 	strcpy(setup_msg, "#*m");
 	strcat(setup_msg, setup_motorAddr);
 	strcat(setup_msg, "\r");
 
 	/* setup tty interface and assign userdefined motor addr */ 
-	set_fd(setup_ttyname, &setup_fd);
-	set_interface_attribs(setup_fd, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
+	get_fd(setup_ttyname, &setup_fd);
+	if(setup_fd > 0){
+		set_interface_attribs(setup_fd, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
 
-	/* user info */
-	printf("setup_ttyname: %s\n", setup_ttyname);
-	printf("derived setup_fd = %d\n", setup_fd);
-	printf("motor adress will be set to: %s\n", setup_motorAddr);
+		/* user info */
+		printf("setup_ttyname: %s\n", setup_ttyname);
+		printf("derived setup_fd = %d\n", setup_fd);
+		printf("motor adress will be set to: %s\n", setup_motorAddr);
 
-	tcflush(setup_fd, TCIFLUSH); 										/* flush input buffer */
-	sport_send_msg(setup_msg, setup_fd);								/* send message */
-	sport_read_msg(setup_msg, setup_fd);								/* read response */
-
+		tcflush(setup_fd, TCIFLUSH); 										/* flush input buffer */
+		sport_send_msg(setup_msg, setup_fd);								/* send message */
+		sport_read_msg(setup_msg, setup_fd);								/* read response */
+	}
+	else
+		printf("\nError: Bad filedescriptor! \nEither the ttyname doesn't exist or you have no permission to write onto the block device\n");
 	/* Run the server loop */
     UA_StatusCode status = UA_Server_run(server, &running);
     UA_Server_delete(server);

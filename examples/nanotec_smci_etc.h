@@ -126,9 +126,9 @@ addMotorControllerTypeConstructor(UA_Server *server) {
 static UA_INLINE UA_StatusCode
 MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 {
-	memset(msg,0,strlen(msg));											/* empty message */
+	memset(msg,'\0',strlen(msg));											/* empty message */
 	char valStr[20];
-	memset(valStr,0,strlen(valStr)); 									/* empty message */
+	memset(valStr,'\0',strlen(valStr)); 									/* empty message */
 	if (valPtr != NULL){
 		sprintf(valStr, "%d", *valPtr);
 	}
@@ -152,11 +152,12 @@ readCurrentAngle(UA_Server *server,
                 UA_DataValue *dataValue) {
 	globalstructMC *global = (globalstructMC*)nodeContext;
 	char msg[30];
-	MCcommand(global->motorAddr, "C", NULL, msg);						/* concatenate message */
+	char* cmd = "C";
+	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
-	UA_Int32 angle = atoi(msg+strlen(global->motorAddr)+1);				/* convert char* to int */
+	UA_Int32 angle = atoi(strpbrk(msg, cmd)+strlen(cmd));							/* convert char* to int */
 	
 	UA_Variant_setScalarCopy(&dataValue->value, &angle, &UA_TYPES[UA_TYPES_INT32]);
 	dataValue->hasValue = true;											/* probably obsolet? */
@@ -170,26 +171,27 @@ writeCurrentAngle(UA_Server *server,
                  const UA_NumericRange *range, const UA_DataValue *dataValue) {
 	globalstructMC *global = (globalstructMC*)nodeContext;
 	char msg[30];
-	char positionstr[10];
-	char cmd[11] = "s";
 	int* position = (int*)dataValue->value.data;
-	sprintf(positionstr, "%d", *position);
-	strcat(cmd, positionstr);
-	MCcommand(global->motorAddr, "p2", NULL, msg);
-	sport_send_msg(msg, global->fd);									/* config: positioning mode absolute */
-	MCcommand(global->motorAddr, cmd, NULL, msg);
-	sport_send_msg(msg, global->fd);									/* config: traverse path to input position*/
-	MCcommand(global->motorAddr, "d1", NULL, msg);
-	sport_send_msg(msg, global->fd);									/* config: turn direction forward */
-	MCcommand(global->motorAddr, "W0", NULL, msg);
-	sport_send_msg(msg, global->fd);									/* config: no repeats of configured set */
-	MCcommand(global->motorAddr, "N0", NULL, msg);
-	sport_send_msg(msg, global->fd);									/* config: no following set to be performed */
-	MCcommand(global->motorAddr, "A", NULL, msg);
-	sport_send_msg(msg, global->fd);									/* Start Motor */
-
-    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Motor starts and moves to configured angle position");
-    return UA_STATUSCODE_BADINTERNALERROR;
+	if(global->fd > 0){
+		MCcommand(global->motorAddr, "p2", NULL, msg);
+		sport_send_msg(msg, global->fd);									/* config: positioning mode absolute */
+		MCcommand(global->motorAddr, "s", position, msg);
+		sport_send_msg(msg, global->fd);									/* config: traverse path to input position*/
+//		MCcommand(global->motorAddr, "d1", NULL, msg);
+//		sport_send_msg(msg, global->fd);									/* config: turn direction forward */
+//		MCcommand(global->motorAddr, "W0", NULL, msg);
+//		sport_send_msg(msg, global->fd);									/* config: no repeats of configured set */
+		MCcommand(global->motorAddr, "N0", NULL, msg);
+		sport_send_msg(msg, global->fd);									/* config: no following set to be performed */
+		MCcommand(global->motorAddr, "A", NULL, msg);
+		sport_send_msg(msg, global->fd);									/* Start Motor */
+		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Motor starts and moves to configured angle position");
+		return UA_STATUSCODE_GOOD;
+	}
+	else{
+		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Bad filedescriptor! Can't send message.");
+		return UA_STATUSCODE_BADUNEXPECTEDERROR;
+	}
 }
 
 static void
@@ -199,7 +201,7 @@ addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, gl
 	strcat(name, "-current-angle-datasource");
 
     UA_VariableAttributes attr = UA_VariableAttributes_default;
-    attr.displayName = UA_LOCALIZEDTEXT("en-US", "Current angle - data source");
+    attr.displayName = UA_LOCALIZEDTEXT("en-US", "angle - data source");
     attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
 
     UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
@@ -225,14 +227,49 @@ readCurrentStatus(UA_Server *server,
                 UA_DataValue *dataValue) {
 	globalstructMC *global = (globalstructMC*)nodeContext;
 	char msg[30];
-	MCcommand(global->motorAddr, "$", NULL, msg);						/* concatenate message */
+	char* cmd = "$";
+	char* stat = (char*) malloc(1);
+	memset(stat, '\0', 1);
+
+	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
 
-	UA_Int32 status = atoi(strpbrk(msg, "$")+1);				/* convert char* to int */
-	
-	UA_Variant_setScalarCopy(&dataValue->value, &status, &UA_TYPES[UA_TYPES_INT32]);
+	if ( (strpbrk(msg,cmd))[1] != '\r'){
+		UA_Int32 status = atoi(strpbrk(msg, cmd)+strlen(cmd));				/* convert char* to int */
+		if (status & 1){
+			stat = (char*)realloc(stat, strlen(stat)+26);
+			strcat(stat, "Bit0: Control is ready\n");
+		}
+		else{
+			stat = (char*)realloc(stat, strlen(stat)+25);
+			strcat(stat, "Bit0: Control is busy\n");
+		}
+		if (status & 2){
+			stat = (char*)realloc(stat, strlen(stat)+33);
+			strcat(stat, "Bit1: Nullposition is reached\n");
+		}
+		if (status & 4){
+			stat = (char*)realloc(stat, strlen(stat)+24);
+			strcat(stat, "Bit2: Position Error\n");
+		}
+		if (status & 8){
+			stat = (char*)realloc(stat, strlen(stat)+163);
+			strcat(stat, "Bit3: Input1 is set while control is ready. Happens when the control was startet via input1 and the control was faster ready again than the input could be set.\n");
+		}
+		if ((status & 160) == 0){
+			stat = (char*)realloc(stat, strlen(stat)+91);
+			strcat(stat, "Bit5 & Bit7: Warning: These bits are unset, though they are designated to be set always\n");
+		}
+	}
+	else{
+		stat = (char*)realloc(stat, strlen(stat)+38);
+		strcat(stat, "Error: Couldn't read any response \n");
+	}
+	UA_String tmp = UA_STRING_ALLOC(stat);
+	UA_Variant_setScalarCopy(&dataValue->value, &tmp, &UA_TYPES[UA_TYPES_STRING]);
+//	UA_Variant_setScalarCopy(&dataValue->value, &status, &UA_TYPES[UA_TYPES_INT32]);
 	dataValue->hasValue = true;											/* probably obsolet? */
     return UA_STATUSCODE_GOOD;
 }
@@ -244,7 +281,7 @@ addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, g
 	strcat(name, "-current-status-datasource");
 
     UA_VariableAttributes attr = UA_VariableAttributes_default;
-    attr.displayName = UA_LOCALIZEDTEXT("en-US", "Current status - data source");
+    attr.displayName = UA_LOCALIZEDTEXT("en-US", "status - data source");
     attr.accessLevel = UA_ACCESSLEVELMASK_READ;
 
     UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
@@ -259,6 +296,68 @@ addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, g
                                         variableTypeNodeId, attr,
                                         statusDataSource, (void*)global, NULL);
 }
+
+#ifdef DATASOURCE_POSITIONMODE
+static UA_StatusCode
+readCurrentPositionMode(UA_Server *server,
+                const UA_NodeId *sessionId, void *sessionContext,
+                const UA_NodeId *nodeId, void *nodeContext,
+                UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
+                UA_DataValue *dataValue) {
+	globalstructMC *global = (globalstructMC*)nodeContext;
+	char msg[30];
+	char* cmd = "Zp";
+	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
+	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
+	sport_send_msg(msg, global->fd);									/* send message */
+	sport_read_msg(msg, global->fd);									/* read response */
+	UA_Int32 posMode = atoi(strpbrk(msg, cmd)+strlen(cmd));				/* convert char* to int */
+	
+	UA_Variant_setScalarCopy(&dataValue->value, &posMode, &UA_TYPES[UA_TYPES_INT32]);
+	dataValue->hasValue = true;											/* probably obsolet? */
+    return UA_STATUSCODE_GOOD;
+}
+
+static UA_StatusCode
+writeCurrentPositionMode(UA_Server *server,
+                 const UA_NodeId *sessionId, void *sessionContext,
+                 const UA_NodeId *nodeId, void *nodeContext,
+                 const UA_NumericRange *range, const UA_DataValue *dataValue) {
+	globalstructMC *global = (globalstructMC*)nodeContext;
+	char msg[30];
+	int* posMode = (int*)dataValue->value.data;
+	/* TODO: plausi check to be implemented */
+	MCcommand(global->motorAddr, "p", posMode, msg);
+	sport_send_msg(msg, global->fd);									/* config: positioning mode absolute */
+
+    UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Motor starts and moves to configured position mode");
+    return UA_STATUSCODE_BADINTERNALERROR;
+}
+
+static void
+addCurrentPositionModeDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
+	char name[50];
+	strcpy(name, (char*)((*nodeId).identifier.string.data));
+	strcat(name, "-current-position-mode-datasource");
+
+    UA_VariableAttributes attr = UA_VariableAttributes_default;
+    attr.displayName = UA_LOCALIZEDTEXT("en-US", "position-mode - data source");
+    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+
+    UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
+    UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
+    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
+    UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
+
+    UA_DataSource posModeDataSource;
+	posModeDataSource.read = readCurrentPositionMode;
+	posModeDataSource.write = writeCurrentPositionMode;
+    UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
+                                        parentReferenceNodeId, currentName,
+                                        variableTypeNodeId, attr,
+                                        posModeDataSource, (void*)global, NULL);
+}
+#endif
 
 /*************************************/
 /* CALLBACK METHODS FOR OBJECT NODES */
@@ -275,7 +374,7 @@ startMotorMethodCallback(UA_Server *server,
 
 	if (global->fd != -1){
 		char msg[8];
-		memset(msg,0,sizeof(msg)); 											/* empty message */
+		memset(msg,'\0',sizeof(msg)); 											/* empty message */
 		MCcommand(global->motorAddr, "A", NULL, msg);						/* concatenate message */
 		tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 		sport_send_msg(msg, global->fd);									/* send message */
@@ -311,7 +410,7 @@ stopMotorMethodCallback(UA_Server *server,
 {
 	globalstructMC *global = (globalstructMC*)objectContext;
 	char msg[8];
-	memset(msg,0,sizeof(msg));											/* empty message */
+	memset(msg,'\0',sizeof(msg));											/* empty message */
 	MCcommand(global->motorAddr, "S", NULL, msg);
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
@@ -351,7 +450,7 @@ readSetMethodCallback(UA_Server *server,
 //	if (lockcheck != 0){
 		/* send msg and receive response */
 		char msg[80];													/* empty message */
-		memset(msg,0,sizeof(msg));
+		memset(msg,'\0',sizeof(msg));
 		char* cmd = "Z|";
 		MCcommand(global->motorAddr, cmd, NULL, msg);					/* concatenate message "#<motorAddr>Z|\r" */
 		tcflush(global->fd, TCIFLUSH); 									/* flush input buffer */
@@ -359,72 +458,72 @@ readSetMethodCallback(UA_Server *server,
 		sport_read_msg(msg, global->fd);								/* read response */
 //		pthread_mutex_unlock(global->lock);								/* unlock */
 //		printf("readSetMethod: unlocked mutex\n");
-		/* prepare user output */
-#define OUTPUT
-#ifdef OUTPUT
-		/* variables for set configuration with allowed values and datatype */
-		char strp[3] = ""; 	/* +1...+19 s8(int) */
-		char strs[10] = "";	/* -100.000.000...+100.000.000 s32(int) */
-		char stru[7] = "";	/* +1...+160.000 u32(int) */
-		char stro[8] = "";	/* +1...+1.000.000 u32(int) */
-		char strn[8] = "";	/* +1...+1.000.000 u32(int) */
-		char strb[6] = "";	/* +1...65.535 u16(int) */
-		char strB[6] = "";	/* +0...65.535 u16(int) */
-		char strd[2] = "";	/* +0...+1 u8(int) */
-		char strt[2] = ""; /* +0...+1 u8(int) */
-		char strW[4] = "";	/* +0...254 u32(int) */
-		char strP[6] = "";	/* +0...65.535 u16(int) */
-		char strN[10] = "";	/* +0...+32 u8(int) */
-		strncat(strp, strpbrk(msg,"p")+1, (size_t)(strpbrk(msg,"s")-strpbrk(msg,"p"))-1);
-		strncat(strs, strpbrk(msg,"s")+1, (size_t)(strpbrk(msg,"u")-strpbrk(msg,"s"))-1);
-		strncat(stru, strpbrk(msg,"u")+1, (size_t)(strpbrk(msg,"o")-strpbrk(msg,"u"))-1);
-		strncat(stro, strpbrk(msg,"o")+1, (size_t)(strpbrk(msg,"n")-strpbrk(msg,"o"))-1);
-		strncat(strn, strpbrk(msg,"n")+1, (size_t)(strpbrk(msg,"b")-strpbrk(msg,"n"))-1);
-		strncat(strb, strpbrk(msg,"b")+1, (size_t)(strpbrk(msg,"B")-strpbrk(msg,"b"))-1);
-		strncat(strB, strpbrk(msg,"B")+1, (size_t)(strpbrk(msg,"d")-strpbrk(msg,"B"))-1);
-		strncat(strd, strpbrk(msg,"d")+1, (size_t)(strpbrk(msg,"t")-strpbrk(msg,"d"))-1);
-		strncat(strt, strpbrk(msg,"t")+1, (size_t)(strpbrk(msg,"W")-strpbrk(msg,"t"))-1);
-		strncat(strW, strpbrk(msg,"W")+1, (size_t)(strpbrk(msg,"P")-strpbrk(msg,"W"))-1);
-		strncat(strP, strpbrk(msg,"P")+1, (size_t)(strpbrk(msg,"N")-strpbrk(msg,"P"))-1);
-		strcat(strN, strpbrk(msg,"N")+1);
-		strN[strlen(strN)-1]='\0';
-		int p = atoi(strp);
-		int s = atoi(strs);
-		int u = atoi(stru);
-//		int o = atoi(stro);
-//		int n = atoi(strn);
-//		int b = atoi(strb);
-//		int B = atoi(strB);
-//		int d = atoi(strd);
-//		int t = atoi(strt);
-//		int W = atoi(strtW),
-//		int P = atoi(strP);
-//		int N = atoi(strN);
-		printf("strp = %s = %d \n", strp, p);
-		printf("strs = %s = %d \n", strs, s);
-		printf("stru = %s = %u \n", stru, u);
-		printf("stro = %s\n", stro);
-		printf("strn = %s\n", strn);
-		printf("strb = %s\n", strb);
-		printf("strB = %s\n", strB);
-		printf("strd = %s\n", strd);
-		printf("strt = %s\n", strt);
-		printf("strW = %s\n", strW);
-		printf("strP = %s\n", strP);
-		printf("strN = %s\n", strN);
-#endif
+
+
 		if (msg[0] == '\0')
 			strcpy(msg, "couln't read, probably READ_TIMEOUT_ was set to short or some other error");
-		UA_String tmp = UA_STRING_ALLOC(msg);
-		UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]); /* user output */
+		else{
+			/* prepare user output */
+			/* variables for set configuration with allowed values and datatype; string-length is decimal numberlength + 2 */
+			char strp[4] = ""; 	/* +1...+19 s8(int) */
+			char strs[11] = "";	/* -100.000.000...+100.000.000 s32(int) */
+			char stru[8] = "";	/* +1...+160.000 u32(int) */
+			char stro[9] = "";	/* +1...+1.000.000 u32(int) */
+			char strn[9] = "";	/* +1...+1.000.000 u32(int) */
+			char strb[7] = "";	/* +1...65.535 u16(int) */
+			char strB[7] = "";	/* +0...65.535 u16(int) */
+			char strd[3] = "";	/* +0...+1 u8(int) */
+			char strt[3] = ""; /* +0...+1 u8(int) */
+			char strW[5] = "";	/* +0...254 u32(int) */
+			char strP[7] = "";	/* +0...65.535 u16(int) */
+			char strN[11] = "";	/* +0...+32 u8(int) */
+			strncat(strp, strpbrk(msg,"p")+1, (size_t)(strpbrk(msg,"s")-strpbrk(msg,"p"))-1);
+			strncat(strs, strpbrk(msg,"s")+1, (size_t)(strpbrk(msg,"u")-strpbrk(msg,"s"))-1);
+			strncat(stru, strpbrk(msg,"u")+1, (size_t)(strpbrk(msg,"o")-strpbrk(msg,"u"))-1);
+			strncat(stro, strpbrk(msg,"o")+1, (size_t)(strpbrk(msg,"n")-strpbrk(msg,"o"))-1);
+			strncat(strn, strpbrk(msg,"n")+1, (size_t)(strpbrk(msg,"b")-strpbrk(msg,"n"))-1);
+			strncat(strb, strpbrk(msg,"b")+1, (size_t)(strpbrk(msg,"B")-strpbrk(msg,"b"))-1);
+			strncat(strB, strpbrk(msg,"B")+1, (size_t)(strpbrk(msg,"d")-strpbrk(msg,"B"))-1);
+			strncat(strd, strpbrk(msg,"d")+1, (size_t)(strpbrk(msg,"t")-strpbrk(msg,"d"))-1);
+			strncat(strt, strpbrk(msg,"t")+1, (size_t)(strpbrk(msg,"W")-strpbrk(msg,"t"))-1);
+			strncat(strW, strpbrk(msg,"W")+1, (size_t)(strpbrk(msg,"P")-strpbrk(msg,"W"))-1);
+			strncat(strP, strpbrk(msg,"P")+1, (size_t)(strpbrk(msg,"N")-strpbrk(msg,"P"))-1);
+			strcat(strN, strpbrk(msg,"N")+1);
+			strN[strlen(strN)-1]='\0';
+			int p = atoi(strp);
+			int s = atoi(strs);
+			int u = atoi(stru);
+			int o = atoi(stro);
+			int n = atoi(strn);
+			int b = atoi(strb);
+			int B = atoi(strB);
+			int d = atoi(strd);
+			int t = atoi(strt);
+			int W = atoi(strW);
+			int P = atoi(strP);
+			int N = atoi(strN);
+			printf("strp = %s = %d \n", strp, p);
+			printf("strs = %s = %d \n", strs, s);
+			printf("stru = %s = %d \n", stru, u);
+			printf("stro = %s = %d \n", stro, o);
+			printf("strn = %s = %d \n", strn, n);
+			printf("strb = %s = %d \n", strb, b);
+			printf("strB = %s = %d \n", strB, B);
+			printf("strd = %s = %d \n", strd, d);
+			printf("strt = %s = %d \n", strt, t);
+			printf("strW = %s = %d \n", strW, W);
+			printf("strP = %s = %d \n", strP, P);
+			printf("strN = %s = %d \n", strN, N);
+
+			UA_String tmp = UA_STRING_ALLOC(msg);
+			UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]); /* user output; TODO: single output for every extracted numerical variable of the read set */
+		}
 //	}
 //	else{
 //		printf("trylock == 0 \n");
 //		printf("couldn't use method, mutex was locked \n");
 //		return UA_STATUSCODE_BADUNEXPECTEDERROR;
 //	}
-
-
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Read Set was called");
     return UA_STATUSCODE_GOOD;
 }
@@ -479,6 +578,8 @@ sportSendMsgMethodCallback(UA_Server *server,
 		sport_send_msg(msg, global->fd);											/* send message */
 	#ifdef READ_RESPONSE
 		sport_read_msg(msg, global->fd);
+		UA_String tmp = UA_STRING_ALLOC(msg);
+		UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]); 
 	#endif
 		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Send Msg was called");
 		return UA_STATUSCODE_GOOD;
@@ -542,4 +643,7 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
 	addCurrentAngleDataSourceVariable(server, nodeId, global);
 #endif
 	addCurrentStatusDataSourceVariable(server, nodeId, global);
+#ifdef DATASOURCE_POSITIONMODE
+	addCurrentPositionModeDataSourceVariable(server, nodeId, global);
+#endif
 }

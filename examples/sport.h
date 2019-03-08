@@ -3,7 +3,7 @@
 /********************************/
 
 static UA_INLINE UA_StatusCode 
-set_fd(char *ttyname, int *fd)
+get_fd(char *ttyname, int *fd)
 {
     *fd = open(ttyname, O_RDWR | O_NOCTTY | O_SYNC); 	/* read and write, no controlling terminal of process,  */
     if (*fd < 0){
