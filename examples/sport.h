@@ -55,7 +55,7 @@ set_interface_attribs(int fd, int speed)
 /* RECEIVE AND SEND MESSAGES ON SERIAL PORT */
 /*******************************************/
 
-/* WIP: Implement select() to check if message can be sent already similar to sport_read_msg() use of select() */
+/* TODO: Implement select() to check if message can be sent already similar to sport_read_msg() use of select() */
 static UA_INLINE UA_StatusCode 
 sport_send_msg(char* msg, int fd)
 {
@@ -67,7 +67,7 @@ sport_send_msg(char* msg, int fd)
 			char msg_cut[strlen(msg)];
 			strcpy(msg_cut, msg);
 			msg_cut[strlen(msg)-1] = '\0';
-			printf("\nsent %d bytes on fd %d as msg = \"%s\\r\" \n", (int)strlen(msg), fd, msg_cut);
+			printf("sent %d bytes on fd %d as msg = \"%s\\r\" \n", (int)strlen(msg), fd, msg_cut);
 		}
 		else{
 			printf("Error %d from write: %s \n wlen= %d\n", errno, strerror(errno), wlen);
@@ -77,7 +77,7 @@ sport_send_msg(char* msg, int fd)
 		return UA_STATUSCODE_GOOD;
 	}
 	else{
-		printf("Error: bad filedescriptor \n");
+		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Error: bad filedescriptor, couldn't write buffer");
 		return UA_STATUSCODE_BADUNEXPECTEDERROR;
 	}
 }
@@ -85,6 +85,7 @@ sport_send_msg(char* msg, int fd)
 static UA_INLINE UA_StatusCode
 sport_read_msg(char* msg, int fd)
 {
+	memset(msg, '\0', strlen(msg));
 	if (fd != -1){
 		/* check buffer */
 		int ready;
@@ -104,7 +105,6 @@ sport_read_msg(char* msg, int fd)
 			int rdlen = (int)read(fd, buf, sizeof(buf));													/* number of bytes read */
 			/* user info */
 			char msg_cut[strlen(buf)];
-			memset(msg, '\0', strlen(msg));
 			strcpy(msg, buf);
 			strcpy(msg_cut, msg);
 			msg_cut[strlen(msg)-1] = '\0';																	/* cut out the LFCR which was converted from the received CR due to tty settings at the end of the message */
@@ -112,16 +112,17 @@ sport_read_msg(char* msg, int fd)
 			return UA_STATUSCODE_GOOD;
 		}
 		if(ready == 0){
-			printf("Timeout, nothing to read in buffer \n");
+			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Warning: Timeout, nothing to read in buffer");
 			return UA_STATUSCODE_BADUNEXPECTEDERROR;
 		}
 		else { /* eg. ready == -1 */
 			printf("Error %d from select: %s \n", errno, strerror(errno));
+			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Warning: Error from select()");
 			return UA_STATUSCODE_BADUNEXPECTEDERROR;
 		}
 	}
 	else{
-		printf("Error: bad filedescriptor \n");
+		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Error: bad filedescriptor, couldn't read buffer");
 		return UA_STATUSCODE_BADUNEXPECTEDERROR;
 	}
 }
