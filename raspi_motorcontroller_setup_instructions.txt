@@ -26,7 +26,7 @@
 1) clone or download git project 
 	https://github.com/MatthiasWerle/open62541-sport.git
 
-2) build examples (server_robolink.c and server_mcsetup.c)
+2) build examples (server_robolink.c and server_setup_motoraddr.c)
 
 ###########################################################
 # INSTRUCTIONS: SETUP COMMUNICATION WITH MOTOR CONTROLLER #
@@ -38,7 +38,7 @@
 	use following command in ssh terminal:
 	dmesg | grep tty
 
-3) run OPC_UA server server_mcsetup
+3) run OPC_UA server server_setup_motoraddr
 	define invidual motor adress
 
 4) assign individual motor adresses for every single motorcontroller which should act asynchronous to the others 
@@ -48,9 +48,9 @@
 
 6) run OPC_UA server server_robolink
 
-############################################################
-# NOTES: devices connected to raspi remote control via ssh #
-############################################################
+####################################################
+# NOTES: list connected devices with UNIX commands #
+####################################################
 # display kernel info history related to usb respectively tty
 dmesg | grep usb
 dmesg | grep tty

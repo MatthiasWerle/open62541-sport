@@ -27,6 +27,7 @@
 /*********************************/
 /* FUNCTIONS AND TYPEDEFINITIONS */
 /*********************************/
+
 /* server stop handler */
 UA_Boolean running = true;
 static void stopHandler(int sign) {
@@ -37,6 +38,7 @@ static void stopHandler(int sign) {
 /*************/
 /* MAIN LOOP */
 /*************/
+
 int main(int argc, char** argv)
 {
     signal(SIGINT, stopHandler);

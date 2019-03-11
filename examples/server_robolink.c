@@ -1,19 +1,20 @@
-/*********************/
-/* GLOBAL PARAMETERS */
-/*********************/
+/**********************/
+/* GLOBAL DEFINITIONS */
+/**********************/
 #define BAUDRATE B115200
 #define READ_TIMEOUT_S 0		/* reading timeout in s */
 #define READ_TIMEOUT_US 100000	/* reading timeout in us, should be greater than 100000 otherwise segmentation faults could happen with Read currently configured set callback method */
 #define SIZE_MOTORADDR 3		/* 3 bytes, for the string reaches from "1" to "255" */
 #define SIZE_TTYNAME 50
 #define N_MOTORCONTROLLERS 3 	/* max. number of motor controllers */
-#define N_PORTS 1				/* number of ports, either 1 or N (1 if all motor controllers are connected to the same port or N if each controller is connected to a single port) */
+#define N_PORTS 1				/* number of ports, either 1 or N_MOTORCONTROLLERS (1 if all motor controllers are connected to the same port or N if each controller is connected to a single port) */
 
 /* following definitions are options which can be commented out */
 #define DEFAULT_TTYNAME
-#define DEFAULT_MOTORADDR		/* ATTENTION: SERVER WILL HANG ITSELF UP IF THE WRONG MOTOR ADRESS IS CONFIGURED BECAUSE READ BLOCKS*/
+#define DEFAULT_MOTORADDR
 #define READ_RESPONSE
 //#define READ_CONT				/* no purpose yet */
+#define WAIT_STATUS_READY
 
 /**********************/
 /* INCLUDED LIBRARIES */
@@ -30,11 +31,8 @@
 #include <string.h>
 #include <termios.h> 			/* lib for serial port communication */
 #include <unistd.h>
-
-#include <string.h>
 #include <stdint.h>
 #include <time.h>				/* clock() function */
-#include <unistd.h>
 #include <pthread.h>			/* allows multi-threading */
 #include <sys/select.h>			/* defines select() */
 #include <sys/types.h>	
@@ -46,6 +44,7 @@
 /*********************************/
 /* FUNCTIONS AND TYPEDEFINITIONS */
 /*********************************/
+
 /* server stop handler */
 UA_Boolean running = true;
 static void stopHandler(int sign) {
@@ -53,6 +52,7 @@ static void stopHandler(int sign) {
     running = false;
 }
 
+/* wait function */
 static void delay(int milli_seconds) { 
     clock_t start_time = clock(); 						/* Stroing start time */
   
@@ -85,8 +85,7 @@ static void *threadServer(void *vargp){
 	return NULL;
 }
 
-static void *threadListen(void *vargp)
-{
+static void *threadListen(void *vargp){
     UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "thread threadListen started to supervise port communication");
 #ifdef READ_CONT 										/* reads continuously on one filedescriptor set WIP */
 	thread_args *argp = (thread_args*)vargp;
@@ -120,48 +119,41 @@ int main(int argc, char** argv){
 	delay(1);
 
     signal(SIGINT, stopHandler);
-    signal(SIGTERM, stopHandler); 						/* catch ctrl-c */
+    signal(SIGTERM, stopHandler); 								/* catch ctrl-c */
 
     /* Create a server listening on port 4840 */
     UA_ServerConfig *config = UA_ServerConfig_new_default();
     UA_Server *server = UA_Server_new(config);
 
-	/* DECLARE GLOBAL VARIABLES */
-	int i;												/* index for loops */
+	/* DECLARATIONS AND DEFINITIONS OF  GLOBAL VARIABLES */
+	int i;														/* index for loops */
 	char **nameid = NULL;
 	char **namebrowse = NULL;
 	char **namenr = NULL;
 
-	UA_NodeId nodeIdMC[N_MOTORCONTROLLERS];								/* Array of NodeId's for every Motor Controller Object Instance */
-	globalstructMC global[N_MOTORCONTROLLERS];							/* array of structs where each element is assigned to one object instace, defined in nanotec_smci_etc.h */
+	UA_NodeId nodeIdMC[N_MOTORCONTROLLERS];						/* Array of NodeId's for every Motor Controller Object Instance */
+	globalstructMC global[N_MOTORCONTROLLERS];					/* array of structs where each element is assigned to one object instace, defined in nanotec_smci_etc.h */
 
-	/* thread IDs */
+	/* declare thread IDs */
 	pthread_t threadServerId;
 	pthread_t threadListenId;
 	pthread_mutex_t lock[N_PORTS];
 
-	/* variables for select() to monitor multiple filedescriptors and prevent infinite loop during read() */
+	/* declare variables for select() to monitor multiple filedescriptors and prevent infinite loop during read() */
 	fd_set readfds;
-	fd_set readfds_single[N_MOTORCONTROLLERS];							/* array with all fds from readfds as single fd sets in an array */
-	struct timeval tv;									/* set timeout for monitoring filedescriptors */
-		tv.tv_sec = READ_TIMEOUT_S;						/* timeout in s */
-		tv.tv_usec = READ_TIMEOUT_US;					/* timeout in microseconds */
+	fd_set readfds_single[N_MOTORCONTROLLERS];					/* array with all fds from readfds as single fd sets in an array */
+	struct timeval tv;											/* set timeout for monitoring filedescriptors */
+		tv.tv_sec = READ_TIMEOUT_S;								/* timeout in s */
+		tv.tv_usec = READ_TIMEOUT_US;							/* timeout in microseconds */
 	printf("tv_sec = %ld, tv_usec = %ld \n", tv.tv_sec, tv.tv_usec);
 
-
-//	int select_null, select_null2;
-//	select_null = select(2, NULL, NULL, NULL, &tv);		/* returns 0 */
-//	select_null2 = select(2, NULL, NULL, NULL, NULL); 	/* leads to hanging up, cause nothing to check and no timeout defined */
-//	printf("select_null = %d \n select_null2 = %d \n", select_null, select_null2);
-
-
-	/* declare tty names for every object instance */
+	/* define tty names for every object instance */
 	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		#ifdef DEFAULT_TTYNAME
-			#if (N_PORTS == 1)							/* each motor controller connected to same port */
+			#if (N_PORTS == 1)									/* each motor controller connected to same port */
 				strcpy(global[i].ttyname, "/dev/ttyUSB0");
 			#endif
-			#if (N_PORTS == N_MOTORCONTROLLERS) 							/* each motor controller connected to own port */
+			#if (N_PORTS == N_MOTORCONTROLLERS) 				/* each motor controller connected to own port */
 				char ttyname_tmp[SIZE_TTYNAME];
 				sprintf(ttyname_tmp, "/dev/ttyUSB%d", i);
 				strcpy(global[i].ttyname, ttyname_tmp);
@@ -188,7 +180,7 @@ int main(int argc, char** argv){
 		#endif
 	}
 
-	/* declare motor addresses for every object instance */
+	/* Define motor addresses for every object instance */
 	#ifndef DEFAULT_MOTORADDR
 		printf("FYI: individual motor adresses for MotorController range from 1 to 254 \n");
 		printf("FYI: broadcast motor adress is \"*\" \n");
@@ -209,20 +201,21 @@ int main(int argc, char** argv){
 	nameid = (char**)malloc(sizeof(**nameid)*N_MOTORCONTROLLERS);			/* pointer to string with name of later used motor controller obj instance nodeId's */
 	namebrowse = (char**)malloc(sizeof(**nameid)*N_MOTORCONTROLLERS);		/* pointer to string with name of later used browsenames */
 	namenr = (char**)malloc(sizeof(**nameid)*N_MOTORCONTROLLERS);			/* pointer to string with name of later used number to generate nodeId's name */
+	FD_ZERO(&readfds);														/* clear file descriptor set */
 
-	FD_ZERO(&readfds);										/* clear file descriptor set */
+
 	/* set filedescriptors, nodeIds for obj. instances, serial port connection configurations, */
 	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		/* set filedescriptors in fd-set and in array struct variable global */
-		get_fd(global[i].ttyname, &(global[i].fd));			/* actually redundant because it'll be also contained in global[i].readfds WIP */
-		printf("global[%d].fd = %d\n", i, global[i].fd);
-		FD_ZERO(&readfds_single[i]);							/* ATENTION! clear file descriptor set */
+		get_fd(global[i].ttyname, &(global[i].fd));							/* in future probably obsolet because it'll be also contained in global[i].readfds WIP */
+
+		FD_ZERO(&readfds_single[i]);										/* WIP: clear file descriptor set */
 		if(global[i].fd != -1){
-			FD_SET(global[i].fd, &readfds_single[i]);			/* ATTENTION! fd set of single fd for global struct assigend to a single motor controller object instance */
-			FD_SET(global[i].fd, &readfds);						/* fd set of all fds, to be used in continously on all fds listening thread WIP!*/
+			FD_SET(global[i].fd, &readfds_single[i]);						/* WIP: fd set of single fd for global struct assigend to a single motor controller object instance */
+			FD_SET(global[i].fd, &readfds);									/* WIP: fd set of all fds, to be used in continously on all fds listening thread WIP!*/
 		}
-		global[i].readfds = &readfds_single[i];
-		global[i].tv = &tv;
+		global[i].readfds = &readfds_single[i];								/* WIP: */
+		global[i].tv = &tv;													/* WIP: */
 
 		/* declare NodeId's for every object instance of a motor controller */
 		nameid[i] = (char*)malloc(sizeof(char*) * 10);
@@ -232,29 +225,30 @@ int main(int argc, char** argv){
 		strcat(*(nameid+i), *(namenr+i));
 		nodeIdMC[i] = UA_NODEID_STRING(1,*(nameid+i));
 
-		/* user info */
-		printf("Idx: %d; fd: %d on %s for nodeIdMC = \"%s\" with motor adress \"%s\" \n",i, global[i].fd, global[i].ttyname, (char*)nodeIdMC[i].identifier.string.data, global[i].motorAddr);
-		/* set connection settings for serial port */
-		set_interface_attribs(global[i].fd, BAUDRATE);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
-	}
-
-	/* Add Object Instances */
-	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "define object types and add object instances");
-    defineObjectTypes(server);
-#ifdef TYPECONSTRUCTOR
-	addMotorControllerTypeConstructor(server);	/* need this? initializes lifecycle?! */
-#endif
-	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
+		/* define browsenames for every object instance of a motor controller */
 		namebrowse[i] = (char*)malloc(sizeof(char*) * 50);
 		strcpy(*(namebrowse+i), "motorController");
 		sprintf(*(namenr+i), "%d", i+1);
-		strcat(*(namebrowse+i), *(namenr+i));		
-		printf("fyi *(namebrowse+i) = %s \n", *(namebrowse+i));
-		printf("(char*)nodeIdMC[i].identifier.string.data = %s \n",(char*)nodeIdMC[i].identifier.string.data);
+		strcat(*(namebrowse+i), *(namenr+i));
+
+		/* set serial port connection settings for every file descriptor */
+		set_interface_attribs(global[i].fd, BAUDRATE);						/*baudrate 115200, 8 bits, no parity, 1 stop bit */
+
+		/* user info */
+		printf("Idx: %d; fd: %d on %s for nodeIdMC = \"%s\" \n with browsename \"%s\" and motor adress \"%s\" \n\n",i, global[i].fd, global[i].ttyname, (char*)nodeIdMC[i].identifier.string.data, *(namebrowse+i), global[i].motorAddr);
+	}
+
+	/* Add Object Instances */
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Define object types and add object instances\n");
+    defineObjectTypes(server);
+#ifdef TYPECONSTRUCTOR
+	addMotorControllerTypeConstructor(server);								/* need this? initializes lifecycle?! */
+#endif
+	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		addMotorControllerObjectInstance(server, *(namebrowse+i), &nodeIdMC[i], &global[i]);
 	}
 
-	/* arguments for multiple threads */
+	/* Define arguments for multiple threads */
 	thread_args arg;
 		arg.config 		= config;
 		arg.server 		= server;
@@ -262,17 +256,23 @@ int main(int argc, char** argv){
 		arg.global 		= global;
 		arg.readfds 	= &readfds;
 		arg.tv			= &tv;
-	void *vargp = (void*)&arg;	/* void argument pointer */
+
+
+	/* DEBUG */
+	char* buf = "017";
+	printf("buf = %s\n", buf);
+	for (i=0; i<3; i++){
+		printf("\nbuf[%d] decimal = %d\n", i, buf[i]);
+	}
+	
 
 	/* create multiple threads */
-	pthread_create(&threadServerId, NULL, threadServer, vargp);
-	printf("created threadServer\n");
-	pthread_create(&threadListenId, NULL, threadListen, vargp);
-	printf("created threadListen\n");
-	printf("created all threads\n");
+	pthread_create(&threadServerId, NULL, threadServer, (void*)&arg);		/* Thread which runs server loop */
+	pthread_create(&threadListenId, NULL, threadListen, (void*)&arg);		/* WIP: Thread which can continously read on a single port */
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Created all threads\n");
 
-	pthread_mutex_destroy(lock);
-	pthread_exit(NULL);
+	pthread_mutex_destroy(lock);											/* WIP not yet implemented */
+	pthread_exit(NULL);														/* WIP not yet implemented */
 
 	UA_StatusCode *statusreturn = arg.status;
 	return (int)*statusreturn;

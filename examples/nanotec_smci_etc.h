@@ -1,14 +1,15 @@
-/*****************************************/
-/* Add Motor Controller Object Instances */
-/*****************************************/
+/*************************************/
+/* MOTOR CONTROLLER TYPE DEFINITIONS */
+/*************************************/
+
 /* typedef for global variable */
 	typedef struct {
 		char ttyname[SIZE_TTYNAME];														/* tty portname e.g. /dev/ttyUSB0 */
 		int fd;																			/* file descriptor of tty port */
 		char motorAddr[SIZE_MOTORADDR];													/* preconfigured motor adress of nanotec stepper motor driver with integrated controller */
-		pthread_mutex_t *lock;
-		fd_set *readfds;
-		struct timeval *tv;
+		pthread_mutex_t *lock;															/* yet not implemented */
+		fd_set *readfds;																/* yet not implemented */
+		struct timeval *tv;																/* yet not implemented */
 	} globalstructMC;
 
 /* predefined identifier for later use */
@@ -123,6 +124,14 @@ addMotorControllerTypeConstructor(UA_Server *server) {
 /*******************/
 /* OTHER FUNCTIONS */
 /*******************/
+
+/* Concatenates a string as command which is readable for nanotec(R) motor controller models 
+ * SMCI12, SMCI33, SMCI35, SMCI36, SMCI47-S, SMCP33, PD2-N, PD4-N and PD6-N
+ *
+ * @param motorAddr The motor Adress 
+ * @param cmd A command from the programming manual for the described motor controllers
+ * @param valPtr An optional pointer to an integer with the value for the command
+ * @return Returns a status code. */
 static UA_INLINE UA_StatusCode
 MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 {
@@ -140,6 +149,7 @@ MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 	return UA_STATUSCODE_GOOD;
 }
 
+/* Look-up-table for the description of position modes */
 static UA_INLINE UA_StatusCode
 get_posMode_description(int posModeIdx, char* posMode){
 	switch(posModeIdx) {
@@ -166,9 +176,12 @@ get_posMode_description(int posModeIdx, char* posMode){
 	}
 	return UA_STATUSCODE_GOOD;
 }
-/****************/
-/* DATA SOURCES */
-/****************/
+/*************************/
+/* DATA SOURCE VARIABLES */
+/*************************/
+
+/* Request to return motor position from motor controller, read response, 
+ * overwrite value of datasource variable and display it with printf */
 static UA_StatusCode
 readCurrentAngle(UA_Server *server,
                 const UA_NodeId *sessionId, void *sessionContext,
@@ -177,7 +190,7 @@ readCurrentAngle(UA_Server *server,
                 UA_DataValue *dataValue) {
 	globalstructMC *global = (globalstructMC*)nodeContext;
 	char msg[30];
-	char* cmd = "C";
+	char* cmd = "C";													/* Command to return position */
 	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
@@ -198,6 +211,7 @@ readCurrentAngle(UA_Server *server,
     return UA_STATUSCODE_GOOD;
 }
 
+/* Adjusts the position mode of the motor controller to absolute, sets it's traverse path and runs the motor */
 static UA_StatusCode
 writeCurrentAngle(UA_Server *server,
                  const UA_NodeId *sessionId, void *sessionContext,
@@ -226,6 +240,11 @@ writeCurrentAngle(UA_Server *server,
 	return UA_STATUSCODE_GOOD;
 }
 
+/* Adds a datasource variable to an object node for the current angle of the motor 
+ * 
+ * @param server The server object.
+ * @param nodeId A pointer to the parent node Id
+ * @param global A pointer to a struct of type globalstructMC */
 static void
 addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
 	char name[50];
@@ -250,6 +269,9 @@ addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, gl
                                         angleDataSource, (void*)global, NULL);
 }
 
+/* Request to return motor status from motor controller, read response, 
+ * overwrite value of datasource variable with status description and 
+ * display numeric status with printf */
 static UA_StatusCode
 readCurrentStatus(UA_Server *server,
                 const UA_NodeId *sessionId, void *sessionContext,
@@ -267,14 +289,15 @@ readCurrentStatus(UA_Server *server,
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
 
+	/* value of motor controller response should be an 8 bit bitmask, but is actually 24 bit long... */
 	if (msg[0] != '\0'){
-		if ( (strpbrk(msg,cmd))[strlen(cmd)] != '\r'){
-			UA_Int32 status = atoi(strpbrk(msg, cmd)+strlen(cmd));				/* convert char* to int */
+		if ( (strpbrk(msg,cmd))[strlen(cmd)] != '\0'){
+			UA_Int32 status = atoi(strpbrk(msg, cmd)+strlen(cmd));		/* convert char* to int */
 			if (status & 1){
 				stat = (char*)realloc(stat, strlen(stat)+26);
 				strcat(stat, "Bit0: Control is ready\n");
 			}
-			else{
+			else if ((status & 1) == 0){
 				stat = (char*)realloc(stat, strlen(stat)+25);
 				strcat(stat, "Bit0: Control is busy\n");
 			}
@@ -290,9 +313,21 @@ readCurrentStatus(UA_Server *server,
 				stat = (char*)realloc(stat, strlen(stat)+163);
 				strcat(stat, "Bit3: Input1 is set while control is ready. Happens when the control was startet via input1 and the control was faster ready again than the input could be set.\n");
 			}
-			if ((status & 160) == 0){
+			if (status & 16){
 				stat = (char*)realloc(stat, strlen(stat)+91);
-				strcat(stat, "Bit5 & Bit7: Warning: These bits are unset, though they are designated to be set always\n");
+				strcat(stat, "Bit4: Warning: This bit is set, though it's designated to be unset always\n");
+			}
+			if ((status & 32) == 0){
+				stat = (char*)realloc(stat, strlen(stat)+91);
+				strcat(stat, "Bit5: Warning: This bit is unset, though it's designated to be set always\n");
+			}
+			if (status & 64){
+				stat = (char*)realloc(stat, strlen(stat)+91);
+				strcat(stat, "Bit6: Warning: This bit is set, though it's designated to be unset always\n");
+			}
+			if ((status & 128) == 0){
+				stat = (char*)realloc(stat, strlen(stat)+91);
+				strcat(stat, "Bit7: Warning: This bit is unset, though it's designated to be set always\n");
 			}
 			UA_String tmp = UA_STRING_ALLOC(stat);
 			UA_Variant_setScalarCopy(&dataValue->value, &tmp, &UA_TYPES[UA_TYPES_STRING]);
@@ -381,9 +416,10 @@ addCurrentPositionModeDataSourceVariable(UA_Server *server, const UA_NodeId *nod
                                         posModeDataSource, (void*)global, NULL);
 }
 
-/*************************************/
-/* CALLBACK METHODS FOR OBJECT NODES */
-/*************************************/
+/******************************************************************/
+/* CALLBACK METHODS FOR OBJECT INSTANCES OF TYPE MOTOR CONTROLLER */
+/******************************************************************/
+
 static UA_StatusCode 
 startMotorMethodCallback(UA_Server *server,
                          const UA_NodeId *sessionId, void *sessionHandle,
@@ -537,8 +573,6 @@ readSetMethodCallback(UA_Server *server,
     return UA_STATUSCODE_GOOD;
 }
 
-
-
 static void
 addReadSetMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
 	UA_Argument inputArgument;
@@ -654,22 +688,24 @@ addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalst
                             1, &inputArgument, 1, &outputArgument, (void*)global, NULL);
 }
 
-/************************/
-/* ADD OBJECT INSTANCES */
-/************************/
+/*****************************************/
+/* Add Motor Controller Object Instances */
+/*****************************************/
+
 static void
 addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId, globalstructMC *global) 
 {
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
     oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
 //    oAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-	printf("this is argument global->fd: %d \n", global->fd);
     UA_Server_addObjectNode(server, *nodeId,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
                             UA_QUALIFIEDNAME(1, name),
                             motorControllerTypeId, oAttr, global, NULL);
 	/* add methods to object instance */
+	printf("\n");
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Add Methods and Datasource Variables to object instance with name = \"%s\"", name);
 	addStartMotorMethod(server, nodeId, global);
 	addStopMotorMethod(server, nodeId, global);
 	addSportSendMsgMethod(server, nodeId, global);
