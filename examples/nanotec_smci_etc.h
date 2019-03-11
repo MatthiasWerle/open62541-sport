@@ -225,10 +225,6 @@ writeCurrentAngle(UA_Server *server,
 		sport_send_msg(msg, global->fd);									/* config: positioning mode absolute */
 		MCcommand(global->motorAddr, "s", position, msg);
 		sport_send_msg(msg, global->fd);									/* config: traverse path to input position*/
-//		MCcommand(global->motorAddr, "d1", NULL, msg);
-//		sport_send_msg(msg, global->fd);									/* config: turn direction forward */
-//		MCcommand(global->motorAddr, "W0", NULL, msg);
-//		sport_send_msg(msg, global->fd);									/* config: no repeats of configured set */
 		MCcommand(global->motorAddr, "N0", NULL, msg);
 		sport_send_msg(msg, global->fd);									/* config: no following set to be performed */
 		MCcommand(global->motorAddr, "A", NULL, msg);
@@ -240,7 +236,7 @@ writeCurrentAngle(UA_Server *server,
 	return UA_STATUSCODE_GOOD;
 }
 
-/* Adds a datasource variable to an object node for the current angle of the motor 
+/* Adds current angle of the motor as datasource variable to an object node of a motor controller instance
  * 
  * @param server The server object.
  * @param nodeId A pointer to the parent node Id
@@ -340,6 +336,11 @@ readCurrentStatus(UA_Server *server,
     return UA_STATUSCODE_GOOD;
 }
 
+/* Adds current status of the motor as datasource variable to an object node of a motor controller instance
+ * 
+ * @param server The server object.
+ * @param nodeId A pointer to the parent node Id
+ * @param global A pointer to a struct of type globalstructMC */
 static void
 addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
 	char name[50];
@@ -363,6 +364,8 @@ addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, g
                                         statusDataSource, (void*)global, NULL);
 }
 
+/* Request to return motors current position from motor controller, read response, 
+ * overwrite value of datasource variable and display it with printf */
 static UA_StatusCode
 readCurrentPositionMode(UA_Server *server,
                 const UA_NodeId *sessionId, void *sessionContext,
@@ -393,6 +396,11 @@ readCurrentPositionMode(UA_Server *server,
     return UA_STATUSCODE_GOOD;
 }
 
+/* Adds current position mode of the motor as datasource variable to an object node of a motor controller instance
+ * 
+ * @param server The server object.
+ * @param nodeId A pointer to the parent node Id
+ * @param global A pointer to a struct of type globalstructMC */
 static void
 addCurrentPositionModeDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
 	char name[50];
@@ -415,6 +423,96 @@ addCurrentPositionModeDataSourceVariable(UA_Server *server, const UA_NodeId *nod
                                         variableTypeNodeId, attr,
                                         posModeDataSource, (void*)global, NULL);
 }
+
+/* Request to return current traverse path from motor controller, read response, 
+ * overwrite value of datasource variable and display it with printf */
+static UA_StatusCode
+readCurrentTraversePath(UA_Server *server,
+                const UA_NodeId *sessionId, void *sessionContext,
+                const UA_NodeId *nodeId, void *nodeContext,
+                UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
+                UA_DataValue *dataValue) {
+	globalstructMC *global = (globalstructMC*)nodeContext;
+	char msg[30];
+	char* cmd = "Zs";													/* Command to return position */
+	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
+	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
+	sport_send_msg(msg, global->fd);									/* send message */
+	sport_read_msg(msg, global->fd);									/* read response */
+
+	if (msg[0] != '\0'){
+		if ( (strpbrk(msg,cmd))[strlen(cmd)] != '\r'){
+			UA_Int32 traversePath = atoi(strpbrk(msg, cmd)+strlen(cmd));							/* convert char* to int */
+			UA_Variant_setScalarCopy(&dataValue->value, &traversePath, &UA_TYPES[UA_TYPES_INT32]);
+			dataValue->hasValue = true;											/* probably obsolet? */
+		}
+		else{
+			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Error: No response due to wrong motor adress \n");
+			printf("msg = %s\n", msg);
+		}
+	}
+    return UA_STATUSCODE_GOOD;
+}
+
+/* Adjusts the traverse path of the motor controller to absolute, sets it's traverse path and runs the motor */
+static UA_StatusCode
+writeCurrentTraversePath(UA_Server *server,
+                 const UA_NodeId *sessionId, void *sessionContext,
+                 const UA_NodeId *nodeId, void *nodeContext,
+                 const UA_NumericRange *range, const UA_DataValue *dataValue) {
+	globalstructMC *global = (globalstructMC*)nodeContext;
+	char msg[30];
+	char* cmd = "s";														/* Command to set traverse path */
+	int* traversePath = (int*)dataValue->value.data;
+	if(global->fd > 0){
+		MCcommand(global->motorAddr, cmd, traversePath, msg);				/* concatenate message */
+		printf("DEBUG: msg = %s\n",msg);
+		tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
+		sport_send_msg(msg, global->fd);									/* send message */
+#ifdef READ_RESPONSE
+		sport_read_msg(msg, global->fd);									/* read response */
+#endif
+		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Motors traverse path is set");
+	}
+	else
+		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Bad filedescriptor! Can't send message.");
+	return UA_STATUSCODE_GOOD;
+}
+
+/* Adds current traverse path of the motor as datasource variable to an object node of a motor controller instance
+ * 
+ * @param server The server object.
+ * @param nodeId A pointer to the parent node Id
+ * @param global A pointer to a struct of type globalstructMC */
+static void
+addCurrentTraversePathDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
+	char name[50];
+	strcpy(name, (char*)((*nodeId).identifier.string.data));
+	strcat(name, "-current-traverse-path-datasource");
+
+    UA_VariableAttributes attr = UA_VariableAttributes_default;
+    attr.displayName = UA_LOCALIZEDTEXT("en-US", "traverse path - data source");
+    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+
+    UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
+    UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
+    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
+    UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
+
+    UA_DataSource traversePathDataSource;
+	traversePathDataSource.read = readCurrentTraversePath;
+	traversePathDataSource.write = writeCurrentTraversePath;
+    UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
+                                        parentReferenceNodeId, currentName,
+                                        variableTypeNodeId, attr,
+                                        traversePathDataSource, (void*)global, NULL);
+}
+
+
+
+
+
+
 
 /******************************************************************/
 /* CALLBACK METHODS FOR OBJECT INSTANCES OF TYPE MOTOR CONTROLLER */
@@ -703,14 +801,18 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId 
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
                             UA_QUALIFIEDNAME(1, name),
                             motorControllerTypeId, oAttr, global, NULL);
-	/* add methods to object instance */
 	printf("\n");
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Add Methods and Datasource Variables to object instance with name = \"%s\"", name);
+
+	/* add methods to object instance */
 	addStartMotorMethod(server, nodeId, global);
 	addStopMotorMethod(server, nodeId, global);
 	addSportSendMsgMethod(server, nodeId, global);
 	addReadSetMethod(server, nodeId, global);
+	
+	/* add datasources to object instance */
 	addCurrentAngleDataSourceVariable(server, nodeId, global);
 	addCurrentStatusDataSourceVariable(server, nodeId, global);
 	addCurrentPositionModeDataSourceVariable(server, nodeId, global);
+	addCurrentTraversePathDataSourceVariable(server, nodeId, global);
 }
