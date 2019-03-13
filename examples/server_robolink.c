@@ -1,6 +1,40 @@
+/* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
+ * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. */
+
+/**
+ * OPC UA server implementation for control of multiple Nanotec motor controllers
+ * ------------------------------------------------------------------------------
+ *
+ * This code is suitable for the following motor controller models
+ * SMCI12, SMCI33, SMCI35, SMCI36, SMCI47-S, SMCP33, PD2-N, PD4-N and PD6-N
+ *
+ * The following code should be run in a command line terminal. The user will be given 
+ * instructions and prompts for parameters to overwrite the default configurations of 
+ * the motor controller.
+ * 
+ * Description: Code utilities
+ * ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ * The following code will run an OPC UA server and establishes a communication with a 
+ * predefined number of motor controllers either connected alltogether to a single serial
+ * port or otherwise all connected to single serial ports.
+ * 
+ * Every motor controller is represented by an object instance which owns several callback methods
+ * and datasources of the motor controllers parameters.
+ * 
+ * Notes on Compatibality  
+ * ^^^^^^^^^^^^^^^^^^^^^^ 
+ * The code was written on Linux (Ubuntu 18.04.2 LTS) and tested for Raspbian GNU/Linux 9.4 (stretch)
+ * 
+ * Warnings: Important notes for for initial use
+ * ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ * Connect everything properly according to the manufacturers technical manual. 
+ * For inital use of a motor controller read and use motorcontroller_initial_setup.c 
+ * to adjust the motorcontrollers configurations (e.g. phase current) to prevent damaging the hardware.*/
+
 /**********************/
 /* GLOBAL DEFINITIONS */
 /**********************/
+
 #define BAUDRATE B115200
 #define READ_TIMEOUT_S 0		/* reading timeout in s */
 #define READ_TIMEOUT_US 100000	/* reading timeout in us, should be greater than 100000 otherwise segmentation faults could happen with Read currently configured set callback method */
@@ -14,11 +48,13 @@
 #define DEFAULT_MOTORADDR
 #define READ_RESPONSE
 //#define READ_CONT				/* no purpose yet */
-#define WAIT_STATUS_READY
+//#define WAIT_STATUS_READY		/* not implemented yet */
+//#define NEW						/* for debugging to test new code snippets */
 
 /**********************/
 /* INCLUDED LIBRARIES */
 /**********************/
+
 #include <signal.h>
 #include <ua_server.h>
 #include <ua_config_default.h>
@@ -256,15 +292,6 @@ int main(int argc, char** argv){
 		arg.global 		= global;
 		arg.readfds 	= &readfds;
 		arg.tv			= &tv;
-
-
-	/* DEBUG */
-	char* buf = "017";
-	printf("buf = %s\n", buf);
-	for (i=0; i<3; i++){
-		printf("\nbuf[%d] decimal = %d\n", i, buf[i]);
-	}
-	
 
 	/* create multiple threads */
 	pthread_create(&threadServerId, NULL, threadServer, (void*)&arg);		/* Thread which runs server loop */

@@ -1,4 +1,7 @@
-/********************************/
+/* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
+ * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. */
+ 
+ /********************************/
 /* SETUP SERIAL PORT CONNECTION */
 /********************************/
 
@@ -51,9 +54,9 @@ set_interface_attribs(int fd, int speed)
     return UA_STATUSCODE_GOOD;
 }
 
-/********************************************/
-/* RECEIVE AND SEND MESSAGES ON SERIAL PORT */
-/*******************************************/
+/********************************/
+/* SEND MESSAGES ON SERIAL PORT */
+/********************************/
 
 /* TODO: Implement select() to check if message can be sent already similar to sport_read_msg() use of select() */
 static UA_INLINE UA_StatusCode 
@@ -81,6 +84,10 @@ sport_send_msg(char* msg, int fd)
 		return UA_STATUSCODE_BADUNEXPECTEDERROR;
 	}
 }
+
+/**********************************/
+/* RECEIVE MESSAGE ON SERIAL PORT */
+/**********************************/
 
 static UA_INLINE UA_StatusCode
 sport_read_msg(char* msg, int fd)

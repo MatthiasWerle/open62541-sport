@@ -1,3 +1,30 @@
+/* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
+ * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. */
+
+/**
+ * Nanotec Motor controller implementation on OPC UA Server
+ * --------------------------------------------------------
+ *
+ * In OPC UA-based architectures, servers are typically situated near the source
+ * of information. In an industrial context, this translates into servers being
+ * near the physical process and clients consuming the data at runtime. In the
+ * previous tutorial, we saw how to add variables to an OPC UA information
+ * model. This tutorial shows how to connect a variable to runtime information,
+ * for example from measurements of a physical process. For simplicity, we take
+ * the system clock as the underlying "process".
+ *
+ * The following code snippets are each concerned with a different way of
+ * updating variable values at runtime. Taken together, the code snippets define
+ * a compilable source file.
+ *
+ * Updating variables manually
+ * ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ * As a starting point, assume that a variable for a value of type
+ * :ref:`datetime` has been created in the server with the identifier
+ * "ns=1,s=current-time". Assuming that our applications gets triggered when a
+ * new value arrives from the underlying process, we can just write into the
+ * variable. */
+
 /*************************************/
 /* MOTOR CONTROLLER TYPE DEFINITIONS */
 /*************************************/
@@ -14,6 +41,7 @@
 
 /* predefined identifier for later use */
 UA_NodeId motorControllerTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1001}};
+UA_NodeId motorSettingsTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1002}};
 
 static void
 defineObjectTypes(UA_Server *server) {
@@ -71,6 +99,14 @@ defineObjectTypes(UA_Server *server) {
                                 deviceTypeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
                                 UA_QUALIFIEDNAME(1, "MotorControllerType"), ctAttr,
                                 NULL, NULL);
+
+	/* Define the object type for "Motor Settings" */
+	UA_ObjectTypeAttributes mtAttr = UA_ObjectTypeAttributes_default;
+	mtAttr.displayName = UA_LOCALIZEDTEXT("en-US", "MotorSettingsType");
+	UA_Server_addObjectTypeNode(server, motorSettingsTypeId,
+								motorControllerTypeId, UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE),
+								UA_QUALIFIEDNAME(1, "MotorSettingsType"), mtAttr,
+								NULL, NULL);
 }
 
 #ifdef TYPECONSTRUCTOR
@@ -508,12 +544,6 @@ addCurrentTraversePathDataSourceVariable(UA_Server *server, const UA_NodeId *nod
                                         traversePathDataSource, (void*)global, NULL);
 }
 
-
-
-
-
-
-
 /******************************************************************/
 /* CALLBACK METHODS FOR OBJECT INSTANCES OF TYPE MOTOR CONTROLLER */
 /******************************************************************/
@@ -791,28 +821,52 @@ addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalst
 /*****************************************/
 
 static void
-addMotorControllerObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId, globalstructMC *global) 
-{
+addMotorControllerObjectInstance(UA_Server *server, char *nameMC, const UA_NodeId *nodeId, globalstructMC *global){
     UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
-    oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
+    oAttr.displayName = UA_LOCALIZEDTEXT("en-US", nameMC);
 //    oAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
     UA_Server_addObjectNode(server, *nodeId,
                             UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
                             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
-                            UA_QUALIFIEDNAME(1, name),
+                            UA_QUALIFIEDNAME(1, nameMC),
                             motorControllerTypeId, oAttr, global, NULL);
 	printf("\n");
-	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Add Methods and Datasource Variables to object instance with name = \"%s\"", name);
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Add Methods and Datasource Variables to object instance with name = \"%s\"", nameMC);
 
 	/* add methods to object instance */
 	addStartMotorMethod(server, nodeId, global);
 	addStopMotorMethod(server, nodeId, global);
 	addSportSendMsgMethod(server, nodeId, global);
 	addReadSetMethod(server, nodeId, global);
-	
+
 	/* add datasources to object instance */
 	addCurrentAngleDataSourceVariable(server, nodeId, global);
 	addCurrentStatusDataSourceVariable(server, nodeId, global);
 	addCurrentPositionModeDataSourceVariable(server, nodeId, global);
 	addCurrentTraversePathDataSourceVariable(server, nodeId, global);
+
+#ifdef NEW
+	/* add motor settings object instance as child to motor controller object instance */
+	char nameMSet[50];
+	strcpy(nameMSet, nameMC);
+	strcat(nameMSet, "MotorSettings");
+	addMotorSettingsObjectInstance(server, nameMSet, nodeId, global);
+#endif
 }
+
+#ifdef NEW
+static void
+addMotorSettingsObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId, globalstructMC *global){
+	UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
+	oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
+	UA_Server_addObjectNode(server, *nodeId,
+							UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
+							UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
+							UA_QUALIFIEDNAME(1, name),
+							motorSettingsTypeId, oAttr, global, NULL);
+
+	UA_Server_addObjectNode(...);
+
+}
+#endif
+

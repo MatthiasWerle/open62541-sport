@@ -42,4 +42,4 @@ endmacro()
 #########################
 
 add_example(server_robolink server_robolink.c)
-add_example(server_setup_motoraddr server_setup_motoraddr.c)
+add_example(motorcontroller_inital_setup motorcontroller_inital_setup.c)

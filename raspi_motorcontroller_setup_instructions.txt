@@ -26,7 +26,7 @@
 1) clone or download git project 
 	https://github.com/MatthiasWerle/open62541-sport.git
 
-2) build examples (server_robolink.c and server_setup_motoraddr.c)
+2) build examples (server_robolink.c and motorcontroller_inital_setup.c)
 
 ###########################################################
 # INSTRUCTIONS: SETUP COMMUNICATION WITH MOTOR CONTROLLER #
@@ -38,8 +38,8 @@
 	use following command in ssh terminal:
 	dmesg | grep tty
 
-3) run OPC_UA server server_setup_motoraddr
-	define invidual motor adress
+3) run OPC_UA server motorcontroller_initial_setup
+	follow code instructions
 
 4) assign individual motor adresses for every single motorcontroller which should act asynchronous to the others 
 	herefor repeat steps 1) to 3)
