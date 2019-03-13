@@ -277,7 +277,7 @@ writeCurrentAngle(UA_Server *server,
  * @param server The server object.
  * @param nodeId A pointer to the parent node Id
  * @param global A pointer to a struct of type globalstructMC */
-static void
+static UA_INLINE void
 addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
 	char name[50];
 	strcpy(name, (char*)((*nodeId).identifier.string.data));
@@ -377,7 +377,7 @@ readCurrentStatus(UA_Server *server,
  * @param server The server object.
  * @param nodeId A pointer to the parent node Id
  * @param global A pointer to a struct of type globalstructMC */
-static void
+static UA_INLINE  void
 addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
 	char name[50];
 	strcpy(name, (char*)((*nodeId).identifier.string.data));
@@ -394,6 +394,7 @@ addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, g
 
     UA_DataSource statusDataSource;
 	statusDataSource.read = readCurrentStatus;
+	posModeDataSource.write = UA_STATUSCODE_GOOD;								/* just in case, because it was necessary to avoid segmentation fault at another UA_Server_addDataSourceVariableNode method but only if run on raspbian  */
     UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
                                         parentReferenceNodeId, currentName,
                                         variableTypeNodeId, attr,
@@ -412,14 +413,20 @@ readCurrentPositionMode(UA_Server *server,
 	char msg[30];
 	char* cmd = "Zp";
 	char posMode[50];
+	int posModeIdx;
 	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
-
+	printf("DEBUG msg = %s\n", msg);
 	if (msg[0] != '\0'){
+		printf("DEBUGGGG\n");
 		if ( (strpbrk(msg,cmd))[strlen(cmd)] != '\r'){
-			get_posMode_description(atoi(strpbrk(msg, cmd)+strlen(cmd)), posMode);
+			printf("DEBUG4\n");
+			posModeIdx = atoi(strpbrk(msg, cmd)+strlen(cmd));
+			printf("\n\n posModeIdx = %d\n", posModeIdx);
+			get_posMode_description(posModeIdx, posMode);
+			printf("posMode = %s\n\n", posMode);
 			
 			UA_String tmp = UA_STRING_ALLOC(posMode);
 			UA_Variant_setScalarCopy(&dataValue->value, &tmp, &UA_TYPES[UA_TYPES_STRING]);
@@ -428,7 +435,6 @@ readCurrentPositionMode(UA_Server *server,
 		else
 			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Error: No response due to wrong motor adress \n");
 	}
-
     return UA_STATUSCODE_GOOD;
 }
 
@@ -437,7 +443,7 @@ readCurrentPositionMode(UA_Server *server,
  * @param server The server object.
  * @param nodeId A pointer to the parent node Id
  * @param global A pointer to a struct of type globalstructMC */
-static void
+static UA_INLINE void
 addCurrentPositionModeDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
 	char name[50];
 	strcpy(name, (char*)((*nodeId).identifier.string.data));
@@ -451,9 +457,9 @@ addCurrentPositionModeDataSourceVariable(UA_Server *server, const UA_NodeId *nod
     UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
     UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
     UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
-
     UA_DataSource posModeDataSource;
 	posModeDataSource.read = readCurrentPositionMode;
+	posModeDataSource.write = UA_STATUSCODE_GOOD;								/* only necessary to avoid segmentation fault if run on raspbian */
     UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
                                         parentReferenceNodeId, currentName,
                                         variableTypeNodeId, attr,
@@ -520,7 +526,7 @@ writeCurrentTraversePath(UA_Server *server,
  * @param server The server object.
  * @param nodeId A pointer to the parent node Id
  * @param global A pointer to a struct of type globalstructMC */
-static void
+static UA_INLINE void
 addCurrentTraversePathDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
 	char name[50];
 	strcpy(name, (char*)((*nodeId).identifier.string.data));
@@ -842,7 +848,7 @@ addMotorControllerObjectInstance(UA_Server *server, char *nameMC, const UA_NodeI
 	/* add datasources to object instance */
 	addCurrentAngleDataSourceVariable(server, nodeId, global);
 	addCurrentStatusDataSourceVariable(server, nodeId, global);
-	addCurrentPositionModeDataSourceVariable(server, nodeId, global);
+	addCurrentPositionModeDataSourceVariable(server, nodeId, global);	/* doesn't work on raspi */
 	addCurrentTraversePathDataSourceVariable(server, nodeId, global);
 
 #ifdef NEW

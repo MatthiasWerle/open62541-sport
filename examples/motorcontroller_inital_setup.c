@@ -67,12 +67,7 @@ int main(int argc, char** argv)
 #else
 	strcpy(setup_ttyname, "/dev/ttyUSB0");
 #endif
-	printf("Enter motor adress for assignment (1...254): ");
-	fgets(setup_motorAddr, 4, stdin);
-	setup_motorAddr[strcspn(setup_motorAddr, "\n")] = 0; /* delete the "\n" from fgets command at the end of the string */
-	strcpy(setup_msg, "#*m");
-	strcat(setup_msg, setup_motorAddr);
-	strcat(setup_msg, "\r");
+
 
 	/* setup tty interface and assign userdefined motor addr */ 
 	get_fd(setup_ttyname, &setup_fd);
@@ -80,8 +75,14 @@ int main(int argc, char** argv)
 		set_interface_attribs(setup_fd, B115200);		/*baudrate 115200, 8 bits, no parity, 1 stop bit */
 
 		/* user info */
-		printf("setup_ttyname: %s\n", setup_ttyname);
+		printf("\nsetup_ttyname: %s\n", setup_ttyname);
 		printf("derived setup_fd = %d\n", setup_fd);
+		printf("Enter motor adress for assignment (1...254): ");
+		fgets(setup_motorAddr, 4, stdin);
+		setup_motorAddr[strcspn(setup_motorAddr, "\n")] = 0; /* delete the "\n" from fgets command at the end of the string */
+		strcpy(setup_msg, "#*m");
+		strcat(setup_msg, setup_motorAddr);
+		strcat(setup_msg, "\r");
 		printf("motor adress will be set to: %s\n\n", setup_motorAddr);
 
 		/* setup motor adress */

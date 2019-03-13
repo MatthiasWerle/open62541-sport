@@ -173,7 +173,7 @@ int main(int argc, char** argv){
 	/* declare thread IDs */
 	pthread_t threadServerId;
 	pthread_t threadListenId;
-	pthread_mutex_t lock[N_PORTS];
+	pthread_mutex_t lock[N_PORTS];							/* one lock for every port */
 
 	/* declare variables for select() to monitor multiple filedescriptors and prevent infinite loop during read() */
 	fd_set readfds;
@@ -214,7 +214,12 @@ int main(int argc, char** argv){
 		#if (N_PORTS == N_MOTORCONTROLLERS) 
 			global[i].lock = &(lock[i]);
 		#endif
+		#if (N_PORTS != 1 & N_PORTS != N_MOTORCONTROLLERS)
+			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "defined global variables N_PORTS and N_MOTORCONTROLLERS don't fit together.");
+			return UA_STATUSCODE_BADUNEXPECTEDERROR;
+		#endif
 	}
+	
 
 	/* Define motor addresses for every object instance */
 	#ifndef DEFAULT_MOTORADDR
