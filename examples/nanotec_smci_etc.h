@@ -32,16 +32,12 @@ typedef struct {
 	int fd;									/* file descriptor to communicate via serial port */
 	char motorAddr[3];						/* motor adress of motor controller */
 	MCCommand MCLib[N_MCCOMMANDS];			/* struct array as list of motor controller commands */
-	int* MCIdx[N_MCCOMMANDS];
 } MCObjectInstanceContext;					/* data context of one motor controller object instance */
 
 typedef struct {
-	MCObjectInstanceContext MCObj;		/* data context of one motor controller object instance */
+	MCObjectInstanceContext* MCObj;		/* data context of one motor controller object instance */
 	int* idx;								/* index to aquire dataset from one MCCommand array element */
 } MCDataSourceContext;						/* data context of one datasource variable of one motor controller object instance */
-
-//enum {minussign, dollarsign, percentsign, _aaa, _accel, _aoa, _b, _B, _baud, _brake_ta, _brake_tb, _brake_tc, _ca, _Capt_iAnalog}; /* not completed yet */
-enum {s, W};
 
 /* predefined identifier for later use */
 UA_NodeId motorControllerTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1001}};
@@ -509,7 +505,6 @@ writeCurrentTraversePath(UA_Server *server,
 	int* traversePath = (int*)dataValue->value.data;
 	if(global->fd > 0){
 		MCmessage(global->motorAddr, cmd, traversePath, msg);				/* concatenate message */
-		printf("DEBUG: msg = %s\n",msg);
 		tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 		sport_send_msg(msg, global->fd);									/* send message */
 #ifdef READ_RESPONSE
@@ -561,19 +556,15 @@ readCurrentDataSource(UA_Server *server,
                 UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
                 UA_DataValue *dataValue) {
 	MCDataSourceContext *context = (MCDataSourceContext*)nodeContext;
-	MCCommand *MCLib = (MCCommand*)context->MCObj.MCLib;
+	MCCommand *MCLib = (MCCommand*)context->MCObj->MCLib;
 	int idx = *((int*)context->idx);
 	char msg[30];
 	
-	printf("\nDEBUG: idx = %d, fd = %d", idx, context->MCObj.fd);
-	printf("\nDEBUG: MCLib[idx].cmd_read = %s", MCLib[idx].cmd_read);
-	printf("\nDEBUG: context->MCObj.motorAddr = %s\n", context->MCObj.motorAddr);
-	
-	if(context->MCObj.fd > 0){
-		MCmessage(context->MCObj.motorAddr, MCLib[idx].cmd_read, NULL, msg);		/* concatenate message */
-		tcflush(context->MCObj.fd, TCIFLUSH); 										/* flush input buffer */
-		sport_send_msg(msg, context->MCObj.fd);									/* send message */
-		sport_read_msg(msg, context->MCObj.fd);									/* read response */
+	if(context->MCObj->fd > 0){
+		MCmessage(context->MCObj->motorAddr, MCLib[idx].cmd_read, NULL, msg);		/* concatenate message */
+		tcflush(context->MCObj->fd, TCIFLUSH); 										/* flush input buffer */
+		sport_send_msg(msg, context->MCObj->fd);									/* send message */
+		sport_read_msg(msg, context->MCObj->fd);									/* read response */
 
 		if (msg[0] != '\0'){
 			if ( (strpbrk(msg,MCLib[idx].cmd_read))[strlen(MCLib[idx].cmd_read)] != '\r'){
@@ -599,18 +590,18 @@ writeCurrentDataSource(UA_Server *server,
                  const UA_NodeId *nodeId, void *nodeContext,
                  const UA_NumericRange *range, const UA_DataValue *dataValue) {
 	MCDataSourceContext *context = (MCDataSourceContext*)nodeContext;
-	MCCommand *MCLib = (MCCommand*)context->MCObj.MCLib;
+	MCCommand *MCLib = (MCCommand*)context->MCObj->MCLib;
 	int idx = *((int*)context->idx);
 	char msg[30];
 
 	if(MCLib[idx].write){
 		int* value = (int*)dataValue->value.data;
-		if(context->MCObj.fd > 0){
-			MCmessage(context->MCObj.motorAddr, MCLib[idx].cmd_write, value, msg);						/* concatenate message */
-			tcflush(context->MCObj.fd, TCIFLUSH); 										/* flush input buffer */
-			sport_send_msg(msg, context->MCObj.fd);									/* send message */
+		if(context->MCObj->fd > 0){
+			MCmessage(context->MCObj->motorAddr, MCLib[idx].cmd_write, value, msg);						/* concatenate message */
+			tcflush(context->MCObj->fd, TCIFLUSH); 										/* flush input buffer */
+			sport_send_msg(msg, context->MCObj->fd);									/* send message */
 	#ifdef READ_RESPONSE
-			sport_read_msg(msg, context->MCObj.fd);									/* read response */
+			sport_read_msg(msg, context->MCObj->fd);									/* read response */
 	#endif
 			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "writeCurrentDataSource was called");
 		}
@@ -627,7 +618,7 @@ writeCurrentDataSource(UA_Server *server,
  * @param global A pointer to a struct of type MCObjectInstanceContext */
 static UA_INLINE void
 addCurrentDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCDataSourceContext *context) {
-	MCCommand *MCLib = (MCCommand*)context->MCObj.MCLib;
+	MCCommand *MCLib = (MCCommand*)context->MCObj->MCLib;
 	int idx = *((int*)context->idx);
 
 	char name[50];
@@ -956,35 +947,4 @@ addMotorControllerObjectInstance(UA_Server *server, char *name, char *nameNrMC, 
                             motorControllerTypeId, oAttr, MCObj, NULL);
 	printf("\n");
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Add Methods and Datasource Variables to object instance with name = \"%s\"", name);
-
-	int i;
-	char nameMSet[50];
-	strcpy(nameMSet, "MotorSettingsMC");
-	strcat(nameMSet, nameNrMC);
-	UA_NodeId nodeIdMSet = UA_NODEID_STRING(1, nameMSet);
-
-	/* add methods to object instance */
-	addStartMotorMethod(server, nodeIdMC, MCObj);
-	addStopMotorMethod(server, nodeIdMC, MCObj);
-	addSportSendMsgMethod(server, nodeIdMC, MCObj);
-	addReadSetMethod(server, nodeIdMC, MCObj);
-
-	/* add datasources to motor controller object instance */
-	addCurrentAngleDataSourceVariable(server, nodeIdMC, MCObj);
-	addCurrentStatusDataSourceVariable(server, nodeIdMC, MCObj);
-
-	/* add motor settings object instance as child to motor controller object instance */
-	addMotorSettingsObjectInstance(server, nameMSet, &nodeIdMSet, nodeIdMC, MCObj);
-
-	/* add datasources to motor settings object instance */
-	addCurrentPositionModeDataSourceVariable(server, &nodeIdMSet, MCObj);
-//	addCurrentTraversePathDataSourceVariable(server, &nodeIdMSet, MCObj);
-
-	/* add datasources for every command in command list */
-	MCDataSourceContext context[N_MCCOMMANDS]; 
-	for(i = 0; i < N_MCCOMMANDS; i++){
-		context[i].idx = (*MCObj).MCIdx[i];
-		context[i].MCObj = *MCObj;
-		addCurrentDataSourceVariable(server, nodeIdMC, &context[i]);
-	}
 }

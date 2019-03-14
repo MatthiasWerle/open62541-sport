@@ -81,46 +81,45 @@ int main(int argc, char** argv){
 	/* declare various variales, some with variable size */
 	int i, j;													/* index for loops */
 	int MCIdx[N_MCCOMMANDS];
-	char **nameId = NULL;										/* pointer to string with name of later used motor controller obj instance nodeId's */
-	char **nameBrowse = NULL;									/* pointer to string with name of later used browsenames */
-	char **nameNr = NULL;										/* pointer to string with name of later used number to generate nodeId's name */
+	char* nameId[N_MOTORCONTROLLERS];							/* pointer to string with name of later used motor controller obj instance nodeId's */
+	char* nameBrowse[N_MOTORCONTROLLERS];						/* pointer to string with name of later used browsenames */
+	char* nameNr[N_MOTORCONTROLLERS];							/* pointer to string with name of later used number to generate nodeId's name */
 	char* ttyname[N_MOTORCONTROLLERS];							/* pointer to string with ttyname for every connected motor controller */
-	
-	nameId = (char**)malloc(sizeof(**nameId)*N_MOTORCONTROLLERS);
-	nameBrowse = (char**)malloc(sizeof(**nameId)*N_MOTORCONTROLLERS);
-	nameNr = (char**)malloc(sizeof(**nameId)*N_MOTORCONTROLLERS);
-//	ttyname = (char**)malloc(sizeof(**ttyname)*N_MOTORCONTROLLERS);	
-	
+	char* nameMSet[N_MOTORCONTROLLERS];
+
 	UA_NodeId nodeIdMC[N_MOTORCONTROLLERS];						/* Array of NodeId's for every Motor Controller Object Instance */
+	UA_NodeId nodeIdMSet[N_MOTORCONTROLLERS];					/* Array of NodeId's for every Motor Settings Object Instance */
+
 	MCObjectInstanceContext MCObj[N_MOTORCONTROLLERS];			/* data context of one motor controller object instance */
 	MCCommand MCLib[N_MCCOMMANDS];								/* struct array as list of motor controller commands */
+	MCDataSourceContext context[N_MOTORCONTROLLERS][N_MCCOMMANDS]; /* struct matrix with one element for each motor controller and each command */
 
 	/* Example Assignment of motor controller command*/
 	/* TODO: Write commands into a csv file and read it from here */
-		MCLib[s].name = "traversepath";
-		MCLib[s].nameDisplay = "traverse-path";
-		MCLib[s].write = 1;
-		MCLib[s].cmd_write = "s";
-		MCLib[s].cmd_read = "Zs";
-		MCLib[s].min = -100000000;
-		MCLib[s].max = +100000000;
-		MCLib[W].name = "repeats";
-		MCLib[W].nameDisplay = "repeats-of-current-set";
-		MCLib[W].write = 1;
-		MCLib[W].cmd_write = "W";
-		MCLib[W].cmd_read = "ZW";
-		MCLib[W].min = 0;
-		MCLib[W].max = 254;
-	//	MCLib[p]{"positionmode", "position-mode", 1, "p", "Zp", 1, 19}; 		/* syntax only possible for inital declaration */
+	//enum {minussign, dollarsign, percentsign, _aaa, _accel, _aoa, _b, _B, _baud, _brake_ta, _brake_tb, _brake_tc, _ca, _Capt_iAnalog}; /* not completed yet */
+	enum {s, W};
+	MCLib[s].name = "traversepath";
+	MCLib[s].nameDisplay = "traverse-path";
+	MCLib[s].write = 1;
+	MCLib[s].cmd_write = "s";
+	MCLib[s].cmd_read = "Zs";
+	MCLib[s].min = -100000000;
+	MCLib[s].max = +100000000;
+	MCLib[W].name = "repeats";
+	MCLib[W].nameDisplay = "repeats-of-current-set";
+	MCLib[W].write = 1;
+	MCLib[W].cmd_write = "W";
+	MCLib[W].cmd_read = "ZW";
+	MCLib[W].min = 0;
+	MCLib[W].max = 254;
+//	MCLib[p]{"positionmode", "position-mode", 1, "p", "Zp", 1, 19}; 		/* syntax only possible for inital declaration */
 
 	/* ASSIGNMENTS */
 	/* Assign pointer to first array element of struct array with motor controller commands to context of motor controller object instances */
-	for (i=0; i<N_MOTORCONTROLLERS; i++){
-		for (j=0; j<N_MCCOMMANDS; j++){
-			MCObj[i].MCLib[j] = MCLib[j];
-			MCIdx[j] = j;
-			MCObj[i].MCIdx[j] = &MCIdx[j];
-			printf("MCObj[%d].MCIdx[%d] = %d \n", i, j, *(MCObj[i].MCIdx[j]));
+	for (j=0; j<N_MCCOMMANDS; j++){
+		MCIdx[j] = j;
+		for (i=0; i<N_MOTORCONTROLLERS; i++){
+				MCObj[i].MCLib[j] = MCLib[j];
 		}
 	}
 
@@ -169,10 +168,15 @@ int main(int argc, char** argv){
 		/* Assign NodeId's for every object instance of a motor controller */
 		nameId[i] = (char*)malloc(sizeof(char*) * 10);
 		nameNr[i] = (char*)malloc(sizeof(char*) * 10);
+		nameMSet[i] = (char*)malloc(sizeof(char*) * 25);
 		strcpy(*(nameId+i), "MCId");
+		strcpy(*(nameMSet+i), "MotorSettingsMC");
 		sprintf(*(nameNr+i), "%d", i+1);
 		strcat(*(nameId+i), *(nameNr+i));
+		strcat(*(nameMSet+i), *(nameNr+i));
+
 		nodeIdMC[i] = UA_NODEID_STRING(1,*(nameId+i));
+		nodeIdMSet[i] = UA_NODEID_STRING(1, *(nameMSet+i));
 
 		/* Assign browsenames for every object instance of a motor controller */
 		nameBrowse[i] = (char*)malloc(sizeof(char*) * 50);
@@ -194,6 +198,31 @@ int main(int argc, char** argv){
 #endif
 	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		addMotorControllerObjectInstance(server, *(nameBrowse+i), *(nameNr+i), &nodeIdMC[i], &MCObj[i]);
+		
+		/* add methods to object instance */
+		addStartMotorMethod(server, &nodeIdMC[i], &MCObj[i]);
+		addStopMotorMethod(server, &nodeIdMC[i], &MCObj[i]);
+		addSportSendMsgMethod(server, &nodeIdMC[i], &MCObj[i]);
+		addReadSetMethod(server, &nodeIdMC[i], &MCObj[i]);
+		
+		/* add datasources to motor controller object instance */
+		addCurrentAngleDataSourceVariable(server, &nodeIdMC[i], &MCObj[i]);				/* hard coded data source */
+		addCurrentStatusDataSourceVariable(server, &nodeIdMC[i], &MCObj[i]);			/* hard coded data source */
+		
+		/* add motor settings object instance as child to motor controller object instance */
+		addMotorSettingsObjectInstance(server, nameMSet[i], &nodeIdMSet[i], &nodeIdMC[i], &MCObj[i]);
+
+		/* add datasources to motor settings object instance */
+		addCurrentPositionModeDataSourceVariable(server, &nodeIdMSet[i], &MCObj[i]);	/* hard coded data source */
+//		addCurrentTraversePathDataSourceVariable(server, &nodeIdMSet[i], &MCObj[i]);	/* hard coded data source */
+	
+		/* add datasources for every command in command list */
+		for(j = 0; j < N_MCCOMMANDS; j++){
+			context[i][j].idx = &MCIdx[j];
+			context[i][j].MCObj = &MCObj[i];
+			addCurrentDataSourceVariable(server,  &nodeIdMC[i], &context[i][j]);
+		}
+	
 	}
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Object types defined and all object instances created\n");
 
