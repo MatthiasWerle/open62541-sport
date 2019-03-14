@@ -5,7 +5,7 @@
 	#define READ_TIMEOUT_S 0
 #endif
 #if !defined(READ_TIMEOUT_MS)
-	#define READ_TIMEOUT_MS 100 																		
+	#define READ_TIMEOUT_MS 10000 																		
 #endif
 #if !defined(WRITE_TIMEOUT_S) 
 	#define WRITE_TIMEOUT_S 0

@@ -2,42 +2,46 @@
  * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. */
 
 /**
- * Nanotec Motor controller implementation on OPC UA Server
- * --------------------------------------------------------
+ * Header for Nanotec motor controller implementation on OPC UA Server
+ * -------------------------------------------------------------------
  *
- * In OPC UA-based architectures, servers are typically situated near the source
- * of information. In an industrial context, this translates into servers being
- * near the physical process and clients consuming the data at runtime. In the
- * previous tutorial, we saw how to add variables to an OPC UA information
- * model. This tutorial shows how to connect a variable to runtime information,
- * for example from measurements of a physical process. For simplicity, we take
- * the system clock as the underlying "process".
- *
- * The following code snippets are each concerned with a different way of
- * updating variable values at runtime. Taken together, the code snippets define
- * a compilable source file.
- *
- * Updating variables manually
- * ^^^^^^^^^^^^^^^^^^^^^^^^^^^
- * As a starting point, assume that a variable for a value of type
- * :ref:`datetime` has been created in the server with the identifier
- * "ns=1,s=current-time". Assuming that our applications gets triggered when a
- * new value arrives from the underlying process, we can just write into the
- * variable. */
-
+ * This headerfile includes typedefinitions for object instances of motor
+ * controllers, a method to add object instances of motor controllers, 
+ * which calls methods to add callback methods and read/write datasource variables 
+ * to the instanciated motor controller object. 
+ * 
+ * There are also useful functions to concatenate strings into motor controller 
+ * readable command format, lock-up-table-methods to translate motor controller
+ * parameters into user readable format. */
+ 
 /*************************************/
 /* MOTOR CONTROLLER TYPE DEFINITIONS */
 /*************************************/
 
-/* typedef for global variable */
-	typedef struct {
-		char ttyname[SIZE_TTYNAME];														/* tty portname e.g. /dev/ttyUSB0 */
-		int fd;																			/* file descriptor of tty port */
-		char motorAddr[SIZE_MOTORADDR];													/* preconfigured motor adress of nanotec stepper motor driver with integrated controller */
-		pthread_mutex_t *lock;															/* yet not implemented */
-		fd_set *readfds;																/* yet not implemented */
-		struct timeval *tv;																/* yet not implemented */
-	} globalstructMC;
+typedef struct {
+	char* name;								/* name of command for Id creation */
+	char* nameDisplay;						/* display name of command for user */
+	bool write;								/* value writable? */
+	char* cmd_write;						/* write command according to motor controller programming manual */
+	char* cmd_read;							/* read command according to motor controller programming manual */
+	int min;								/* minimal allowed value */
+	int max;								/* maximal allowed value */
+} MCCommand;								/* struct variable to parametrize one motor controller command */
+
+typedef struct {
+	int fd;									/* file descriptor to communicate via serial port */
+	char motorAddr[3];						/* motor adress of motor controller */
+	MCCommand MCLib[N_MCCOMMANDS];			/* struct array as list of motor controller commands */
+	int* MCIdx[N_MCCOMMANDS];
+} MCObjectInstanceContext;					/* data context of one motor controller object instance */
+
+typedef struct {
+	MCObjectInstanceContext MCObj;		/* data context of one motor controller object instance */
+	int* idx;								/* index to aquire dataset from one MCCommand array element */
+} MCDataSourceContext;						/* data context of one datasource variable of one motor controller object instance */
+
+//enum {minussign, dollarsign, percentsign, _aaa, _accel, _aoa, _b, _B, _baud, _brake_ta, _brake_tb, _brake_tc, _ca, _Capt_iAnalog}; /* not completed yet */
+enum {s, W};
 
 /* predefined identifier for later use */
 UA_NodeId motorControllerTypeId = {1, UA_NODEIDTYPE_NUMERIC, {1001}};
@@ -169,7 +173,7 @@ addMotorControllerTypeConstructor(UA_Server *server) {
  * @param valPtr An optional pointer to an integer with the value for the command
  * @return Returns a status code. */
 static UA_INLINE UA_StatusCode
-MCcommand(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
+MCmessage(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 {
 	memset(msg,'\0',strlen(msg));											/* empty message */
 	char valStr[20];
@@ -224,10 +228,10 @@ readCurrentAngle(UA_Server *server,
                 const UA_NodeId *nodeId, void *nodeContext,
                 UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
                 UA_DataValue *dataValue) {
-	globalstructMC *global = (globalstructMC*)nodeContext;
+	MCObjectInstanceContext *global = (MCObjectInstanceContext*)nodeContext;
 	char msg[30];
 	char* cmd = "C";													/* Command to return position */
-	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
+	MCmessage(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
@@ -253,17 +257,17 @@ writeCurrentAngle(UA_Server *server,
                  const UA_NodeId *sessionId, void *sessionContext,
                  const UA_NodeId *nodeId, void *nodeContext,
                  const UA_NumericRange *range, const UA_DataValue *dataValue) {
-	globalstructMC *global = (globalstructMC*)nodeContext;
+	MCObjectInstanceContext *global = (MCObjectInstanceContext*)nodeContext;
 	char msg[30];
 	int* position = (int*)dataValue->value.data;
 	if(global->fd > 0){
-		MCcommand(global->motorAddr, "p2", NULL, msg);
+		MCmessage(global->motorAddr, "p2", NULL, msg);
 		sport_send_msg(msg, global->fd);									/* config: positioning mode absolute */
-		MCcommand(global->motorAddr, "s", position, msg);
+		MCmessage(global->motorAddr, "s", position, msg);
 		sport_send_msg(msg, global->fd);									/* config: traverse path to input position*/
-		MCcommand(global->motorAddr, "N0", NULL, msg);
+		MCmessage(global->motorAddr, "N0", NULL, msg);
 		sport_send_msg(msg, global->fd);									/* config: no following set to be performed */
-		MCcommand(global->motorAddr, "A", NULL, msg);
+		MCmessage(global->motorAddr, "A", NULL, msg);
 		sport_send_msg(msg, global->fd);									/* Start Motor */
 		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Motor starts and moves to configured angle position");
 	}
@@ -276,9 +280,9 @@ writeCurrentAngle(UA_Server *server,
  * 
  * @param server The server object.
  * @param nodeId A pointer to the parent node Id
- * @param global A pointer to a struct of type globalstructMC */
+ * @param global A pointer to a struct of type MCObjectInstanceContext */
 static UA_INLINE void
-addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
+addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCObjectInstanceContext *global) {
 	char name[50];
 	strcpy(name, (char*)((*nodeId).identifier.string.data));
 	strcat(name, "-current-angle-datasource");
@@ -310,13 +314,13 @@ readCurrentStatus(UA_Server *server,
                 const UA_NodeId *nodeId, void *nodeContext,
                 UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
                 UA_DataValue *dataValue) {
-	globalstructMC *global = (globalstructMC*)nodeContext;
+	MCObjectInstanceContext *global = (MCObjectInstanceContext*)nodeContext;
 	char msg[30];
 	char* cmd = "$";
 	char* stat = (char*) malloc(1);
 	memset(stat, '\0', 1);
 
-	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
+	MCmessage(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
@@ -376,9 +380,9 @@ readCurrentStatus(UA_Server *server,
  * 
  * @param server The server object.
  * @param nodeId A pointer to the parent node Id
- * @param global A pointer to a struct of type globalstructMC */
+ * @param global A pointer to a struct of type MCObjectInstanceContext */
 static UA_INLINE  void
-addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
+addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCObjectInstanceContext *global) {
 	char name[50];
 	strcpy(name, (char*)((*nodeId).identifier.string.data));
 	strcat(name, "-current-status-datasource");
@@ -394,7 +398,7 @@ addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, g
 
     UA_DataSource statusDataSource;
 	statusDataSource.read = readCurrentStatus;
-	posModeDataSource.write = UA_STATUSCODE_GOOD;								/* just in case, because it was necessary to avoid segmentation fault at another UA_Server_addDataSourceVariableNode method but only if run on raspbian  */
+	statusDataSource.write = UA_STATUSCODE_GOOD;								/* just in case, because it was necessary to avoid segmentation fault at another UA_Server_addDataSourceVariableNode method but only if run on raspbian  */
     UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
                                         parentReferenceNodeId, currentName,
                                         variableTypeNodeId, attr,
@@ -409,20 +413,17 @@ readCurrentPositionMode(UA_Server *server,
                 const UA_NodeId *nodeId, void *nodeContext,
                 UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
                 UA_DataValue *dataValue) {
-	globalstructMC *global = (globalstructMC*)nodeContext;
+	MCObjectInstanceContext *global = (MCObjectInstanceContext*)nodeContext;
 	char msg[30];
 	char* cmd = "Zp";
 	char posMode[50];
 	int posModeIdx;
-	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
+	MCmessage(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
-	printf("DEBUG msg = %s\n", msg);
 	if (msg[0] != '\0'){
-		printf("DEBUGGGG\n");
 		if ( (strpbrk(msg,cmd))[strlen(cmd)] != '\r'){
-			printf("DEBUG4\n");
 			posModeIdx = atoi(strpbrk(msg, cmd)+strlen(cmd));
 			printf("\n\n posModeIdx = %d\n", posModeIdx);
 			get_posMode_description(posModeIdx, posMode);
@@ -442,9 +443,9 @@ readCurrentPositionMode(UA_Server *server,
  * 
  * @param server The server object.
  * @param nodeId A pointer to the parent node Id
- * @param global A pointer to a struct of type globalstructMC */
+ * @param global A pointer to a struct of type MCObjectInstanceContext */
 static UA_INLINE void
-addCurrentPositionModeDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
+addCurrentPositionModeDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCObjectInstanceContext *global) {
 	char name[50];
 	strcpy(name, (char*)((*nodeId).identifier.string.data));
 	strcat(name, "-current-position-mode-datasource");
@@ -474,10 +475,10 @@ readCurrentTraversePath(UA_Server *server,
                 const UA_NodeId *nodeId, void *nodeContext,
                 UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
                 UA_DataValue *dataValue) {
-	globalstructMC *global = (globalstructMC*)nodeContext;
+	MCObjectInstanceContext *global = (MCObjectInstanceContext*)nodeContext;
 	char msg[30];
 	char* cmd = "Zs";													/* Command to return position */
-	MCcommand(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
+	MCmessage(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 	sport_read_msg(msg, global->fd);									/* read response */
@@ -502,12 +503,12 @@ writeCurrentTraversePath(UA_Server *server,
                  const UA_NodeId *sessionId, void *sessionContext,
                  const UA_NodeId *nodeId, void *nodeContext,
                  const UA_NumericRange *range, const UA_DataValue *dataValue) {
-	globalstructMC *global = (globalstructMC*)nodeContext;
+	MCObjectInstanceContext *global = (MCObjectInstanceContext*)nodeContext;
 	char msg[30];
 	char* cmd = "s";														/* Command to set traverse path */
 	int* traversePath = (int*)dataValue->value.data;
 	if(global->fd > 0){
-		MCcommand(global->motorAddr, cmd, traversePath, msg);				/* concatenate message */
+		MCmessage(global->motorAddr, cmd, traversePath, msg);				/* concatenate message */
 		printf("DEBUG: msg = %s\n",msg);
 		tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 		sport_send_msg(msg, global->fd);									/* send message */
@@ -525,9 +526,9 @@ writeCurrentTraversePath(UA_Server *server,
  * 
  * @param server The server object.
  * @param nodeId A pointer to the parent node Id
- * @param global A pointer to a struct of type globalstructMC */
+ * @param global A pointer to a struct of type MCObjectInstanceContext */
 static UA_INLINE void
-addCurrentTraversePathDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, globalstructMC *global) {
+addCurrentTraversePathDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCObjectInstanceContext *global) {
 	char name[50];
 	strcpy(name, (char*)((*nodeId).identifier.string.data));
 	strcat(name, "-current-traverse-path-datasource");
@@ -550,6 +551,111 @@ addCurrentTraversePathDataSourceVariable(UA_Server *server, const UA_NodeId *nod
                                         traversePathDataSource, (void*)global, NULL);
 }
 
+#ifdef NEW
+/* Generic request to return a single current parameter from motor controller and optionally to overwrite it.
+ * nodeContext  */
+static UA_StatusCode
+readCurrentDataSource(UA_Server *server,
+                const UA_NodeId *sessionId, void *sessionContext,
+                const UA_NodeId *nodeId, void *nodeContext,
+                UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
+                UA_DataValue *dataValue) {
+	MCDataSourceContext *context = (MCDataSourceContext*)nodeContext;
+	MCCommand *MCLib = (MCCommand*)context->MCObj.MCLib;
+	int idx = *((int*)context->idx);
+	char msg[30];
+	
+	printf("\nDEBUG: idx = %d, fd = %d", idx, context->MCObj.fd);
+	printf("\nDEBUG: MCLib[idx].cmd_read = %s", MCLib[idx].cmd_read);
+	printf("\nDEBUG: context->MCObj.motorAddr = %s\n", context->MCObj.motorAddr);
+	
+	if(context->MCObj.fd > 0){
+		MCmessage(context->MCObj.motorAddr, MCLib[idx].cmd_read, NULL, msg);		/* concatenate message */
+		tcflush(context->MCObj.fd, TCIFLUSH); 										/* flush input buffer */
+		sport_send_msg(msg, context->MCObj.fd);									/* send message */
+		sport_read_msg(msg, context->MCObj.fd);									/* read response */
+
+		if (msg[0] != '\0'){
+			if ( (strpbrk(msg,MCLib[idx].cmd_read))[strlen(MCLib[idx].cmd_read)] != '\r'){
+				UA_Int32 value = atoi(strpbrk(msg, MCLib[idx].cmd_read)+strlen(MCLib[idx].cmd_read));							/* convert char* to int */
+				UA_Variant_setScalarCopy(&dataValue->value, &value, &UA_TYPES[UA_TYPES_INT32]);
+				dataValue->hasValue = true;											/* probably obsolet? */
+			}
+			else{
+				UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Error: No response due to wrong motor adress \n");
+				printf("msg = %s\n", msg);
+			}
+		}
+	}
+	else
+		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Bad filedescriptor! Can't send message.");
+    return UA_STATUSCODE_GOOD;
+}
+
+/* Adjusts the traverse path of the motor controller to absolute, sets it's traverse path and runs the motor */
+static UA_StatusCode
+writeCurrentDataSource(UA_Server *server,
+                 const UA_NodeId *sessionId, void *sessionContext,
+                 const UA_NodeId *nodeId, void *nodeContext,
+                 const UA_NumericRange *range, const UA_DataValue *dataValue) {
+	MCDataSourceContext *context = (MCDataSourceContext*)nodeContext;
+	MCCommand *MCLib = (MCCommand*)context->MCObj.MCLib;
+	int idx = *((int*)context->idx);
+	char msg[30];
+
+	if(MCLib[idx].write){
+		int* value = (int*)dataValue->value.data;
+		if(context->MCObj.fd > 0){
+			MCmessage(context->MCObj.motorAddr, MCLib[idx].cmd_write, value, msg);						/* concatenate message */
+			tcflush(context->MCObj.fd, TCIFLUSH); 										/* flush input buffer */
+			sport_send_msg(msg, context->MCObj.fd);									/* send message */
+	#ifdef READ_RESPONSE
+			sport_read_msg(msg, context->MCObj.fd);									/* read response */
+	#endif
+			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "writeCurrentDataSource was called");
+		}
+		else
+			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Bad filedescriptor! Can't send message.");
+	}
+	return UA_STATUSCODE_GOOD;
+}
+
+/* Adds current traverse path of the motor as datasource variable to an object node of a motor controller instance
+ * 
+ * @param server The server object.
+ * @param nodeId A pointer to the parent node Id
+ * @param global A pointer to a struct of type MCObjectInstanceContext */
+static UA_INLINE void
+addCurrentDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCDataSourceContext *context) {
+	MCCommand *MCLib = (MCCommand*)context->MCObj.MCLib;
+	int idx = *((int*)context->idx);
+
+	char name[50];
+	strcpy(name, (char*)((*nodeId).identifier.string.data));
+	strcat(name, MCLib[idx].name);
+
+    UA_VariableAttributes attr = UA_VariableAttributes_default;
+    attr.displayName = UA_LOCALIZEDTEXT("en-US", MCLib[idx].nameDisplay);
+	if(MCLib[idx].write)
+		attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
+	else
+		attr.accessLevel = UA_ACCESSLEVELMASK_READ;
+
+    UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
+    UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
+    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
+    UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
+
+    UA_DataSource dataSource;
+	dataSource.read = readCurrentDataSource;
+	dataSource.write = writeCurrentDataSource;
+    UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
+                                        parentReferenceNodeId, currentName,
+                                        variableTypeNodeId, attr,
+                                        dataSource, (void*)context, NULL);
+}
+#endif
+
 /******************************************************************/
 /* CALLBACK METHODS FOR OBJECT INSTANCES OF TYPE MOTOR CONTROLLER */
 /******************************************************************/
@@ -562,12 +668,12 @@ startMotorMethodCallback(UA_Server *server,
 						 size_t inputSize, const UA_Variant *input,
                          size_t outputSize, UA_Variant *output)
 {
-	globalstructMC *global = (globalstructMC*)objectContext;
+	MCObjectInstanceContext *global = (MCObjectInstanceContext*)objectContext;
 
 	if (global->fd != -1){
 		char msg[8];
 		memset(msg,'\0',sizeof(msg)); 										/* empty message */
-		MCcommand(global->motorAddr, "A", NULL, msg);						/* concatenate message */
+		MCmessage(global->motorAddr, "A", NULL, msg);						/* concatenate message */
 		tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 		sport_send_msg(msg, global->fd);									/* send message */
 #ifdef READ_RESPONSE
@@ -579,7 +685,7 @@ startMotorMethodCallback(UA_Server *server,
 }
 
 static void
-addStartMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
+addStartMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, MCObjectInstanceContext *global){
 	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
 	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Start Motor with current set");
 	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Start Motor");
@@ -600,10 +706,10 @@ stopMotorMethodCallback(UA_Server *server,
 						 size_t inputSize, const UA_Variant *input,
                          size_t outputSize, UA_Variant *output)
 {
-	globalstructMC *global = (globalstructMC*)objectContext;
+	MCObjectInstanceContext *global = (MCObjectInstanceContext*)objectContext;
 	char msg[8];
 	memset(msg,'\0',sizeof(msg));											/* empty message */
-	MCcommand(global->motorAddr, "S", NULL, msg);
+	MCmessage(global->motorAddr, "S", NULL, msg);
 	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
 	sport_send_msg(msg, global->fd);									/* send message */
 #ifdef READ_RESPONSE
@@ -614,7 +720,7 @@ stopMotorMethodCallback(UA_Server *server,
 }
 
 static void
-addStopMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
+addStopMotorMethod(UA_Server *server, const UA_NodeId *objectNodeId, MCObjectInstanceContext *global){
 	UA_MethodAttributes sendAttr = UA_MethodAttributes_default;
 	sendAttr.description = UA_LOCALIZEDTEXT("en-US","Stop Motor with current set");
 	sendAttr.displayName = UA_LOCALIZEDTEXT("en-US","Stop Motor");
@@ -637,14 +743,14 @@ readSetMethodCallback(UA_Server *server,
 {
 	printf("readSetMethodCallback ... \n");
 	/* initial declerations */
-	globalstructMC *global = (globalstructMC*)objectContext;
+	MCObjectInstanceContext *global = (MCObjectInstanceContext*)objectContext;
 //	int lockcheck = pthread_mutex_trylock(global->lock);
 //	if (lockcheck != 0){
 		/* send msg and receive response */
 		char msg[80];													/* empty message */
 		memset(msg,'\0',sizeof(msg));
 		char* cmd = "Z|";
-		MCcommand(global->motorAddr, cmd, NULL, msg);					/* concatenate message "#<motorAddr>Z|\r" */
+		MCmessage(global->motorAddr, cmd, NULL, msg);					/* concatenate message "#<motorAddr>Z|\r" */
 		tcflush(global->fd, TCIFLUSH); 									/* flush input buffer */
 		sport_send_msg(msg, global->fd);								/* send message */
 		sport_read_msg(msg, global->fd);								/* read response */
@@ -708,7 +814,7 @@ readSetMethodCallback(UA_Server *server,
 }
 
 static void
-addReadSetMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
+addReadSetMethod(UA_Server *server, const UA_NodeId *objectNodeId, MCObjectInstanceContext *global){
 	UA_Argument inputArgument;
 	UA_Argument_init(&inputArgument);
 	inputArgument.description = UA_LOCALIZEDTEXT("en-US", "An unnecessary string");
@@ -771,12 +877,12 @@ sportSendMsgMethodCallback(UA_Server *server,
                          size_t outputSize, UA_Variant *output)
 {
 	/* initial declerations */
-	globalstructMC *global = (globalstructMC*)objectContext;
+	MCObjectInstanceContext *global = (MCObjectInstanceContext*)objectContext;
 	UA_String *inputStr = (UA_String*)input->data; 									/* message to be sent */
 	if(inputStr->length > 0 ){
 		char* cmd = (char*)inputStr->data;
 		char msg[80];
-		MCcommand(global->motorAddr, cmd, NULL, msg);								/* concatenate message */
+		MCmessage(global->motorAddr, cmd, NULL, msg);								/* concatenate message */
 		tcflush(global->fd, TCIFLUSH); 												/* flush input buffer */
 		sport_send_msg(msg, global->fd);											/* send message */
 	#ifdef READ_RESPONSE
@@ -794,7 +900,7 @@ sportSendMsgMethodCallback(UA_Server *server,
 }
 
 static void
-addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalstructMC *global){
+addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, MCObjectInstanceContext *MCObj){
 	UA_Argument inputArgument;
 	UA_Argument_init(&inputArgument);
 	inputArgument.description = UA_LOCALIZEDTEXT("en-US", "A string, command e.g. \"A\" or \"J1\" or \"J0\"");
@@ -819,60 +925,66 @@ addSportSendMsgMethod(UA_Server *server, const UA_NodeId *objectNodeId, globalst
                             UA_NODEID_NUMERIC(0, UA_NS0ID_HASORDEREDCOMPONENT),
                             UA_QUALIFIEDNAME(1, "SportSendMsg"),
                             sendAttr, &sportSendMsgMethodCallback,
-                            1, &inputArgument, 1, &outputArgument, (void*)global, NULL);
+                            1, &inputArgument, 1, &outputArgument, (void*)MCObj, NULL);
 }
 
-/*****************************************/
-/* Add Motor Controller Object Instances */
-/*****************************************/
+/************************************************************************/
+/* Add Object Instance Methods for Motor Settings and Motor Controllers */
+/************************************************************************/
 
 static void
-addMotorControllerObjectInstance(UA_Server *server, char *nameMC, const UA_NodeId *nodeId, globalstructMC *global){
-    UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
-    oAttr.displayName = UA_LOCALIZEDTEXT("en-US", nameMC);
-//    oAttr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-    UA_Server_addObjectNode(server, *nodeId,
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-                            UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
-                            UA_QUALIFIEDNAME(1, nameMC),
-                            motorControllerTypeId, oAttr, global, NULL);
-	printf("\n");
-	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Add Methods and Datasource Variables to object instance with name = \"%s\"", nameMC);
-
-	/* add methods to object instance */
-	addStartMotorMethod(server, nodeId, global);
-	addStopMotorMethod(server, nodeId, global);
-	addSportSendMsgMethod(server, nodeId, global);
-	addReadSetMethod(server, nodeId, global);
-
-	/* add datasources to object instance */
-	addCurrentAngleDataSourceVariable(server, nodeId, global);
-	addCurrentStatusDataSourceVariable(server, nodeId, global);
-	addCurrentPositionModeDataSourceVariable(server, nodeId, global);	/* doesn't work on raspi */
-	addCurrentTraversePathDataSourceVariable(server, nodeId, global);
-
-#ifdef NEW
-	/* add motor settings object instance as child to motor controller object instance */
-	char nameMSet[50];
-	strcpy(nameMSet, nameMC);
-	strcat(nameMSet, "MotorSettings");
-	addMotorSettingsObjectInstance(server, nameMSet, nodeId, global);
-#endif
-}
-
-#ifdef NEW
-static void
-addMotorSettingsObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId, globalstructMC *global){
+addMotorSettingsObjectInstance(UA_Server *server, char *name, const UA_NodeId *nodeId, const UA_NodeId *parentNodeId, MCObjectInstanceContext *MCObj){
 	UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
 	oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
 	UA_Server_addObjectNode(server, *nodeId,
-							UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
+							*parentNodeId,
 							UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
 							UA_QUALIFIEDNAME(1, name),
-							motorSettingsTypeId, oAttr, global, NULL);
-
-	UA_Server_addObjectNode(...);
+							motorSettingsTypeId, oAttr, MCObj, NULL);
 
 }
-#endif
 
+static void
+
+addMotorControllerObjectInstance(UA_Server *server, char *name, char *nameNrMC, const UA_NodeId *nodeIdMC, MCObjectInstanceContext *MCObj){
+    UA_ObjectAttributes oAttr = UA_ObjectAttributes_default;
+    oAttr.displayName = UA_LOCALIZEDTEXT("en-US", name);
+    UA_Server_addObjectNode(server, *nodeIdMC,
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
+                            UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
+                            UA_QUALIFIEDNAME(1, name),
+                            motorControllerTypeId, oAttr, MCObj, NULL);
+	printf("\n");
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Add Methods and Datasource Variables to object instance with name = \"%s\"", name);
+
+	int i;
+	char nameMSet[50];
+	strcpy(nameMSet, "MotorSettingsMC");
+	strcat(nameMSet, nameNrMC);
+	UA_NodeId nodeIdMSet = UA_NODEID_STRING(1, nameMSet);
+
+	/* add methods to object instance */
+	addStartMotorMethod(server, nodeIdMC, MCObj);
+	addStopMotorMethod(server, nodeIdMC, MCObj);
+	addSportSendMsgMethod(server, nodeIdMC, MCObj);
+	addReadSetMethod(server, nodeIdMC, MCObj);
+
+	/* add datasources to motor controller object instance */
+	addCurrentAngleDataSourceVariable(server, nodeIdMC, MCObj);
+	addCurrentStatusDataSourceVariable(server, nodeIdMC, MCObj);
+
+	/* add motor settings object instance as child to motor controller object instance */
+	addMotorSettingsObjectInstance(server, nameMSet, &nodeIdMSet, nodeIdMC, MCObj);
+
+	/* add datasources to motor settings object instance */
+	addCurrentPositionModeDataSourceVariable(server, &nodeIdMSet, MCObj);
+//	addCurrentTraversePathDataSourceVariable(server, &nodeIdMSet, MCObj);
+
+	/* add datasources for every command in command list */
+	MCDataSourceContext context[N_MCCOMMANDS]; 
+	for(i = 0; i < N_MCCOMMANDS; i++){
+		context[i].idx = (*MCObj).MCIdx[i];
+		context[i].MCObj = *MCObj;
+		addCurrentDataSourceVariable(server, nodeIdMC, &context[i]);
+	}
+}

@@ -11,7 +11,11 @@
  * The following code should be run in a command line terminal. The user will be given 
  * instructions and prompts for parameters to overwrite the default configurations of 
  * the motor controller.
- *
+ * 
+ * Notes on Compatibality  
+ * ^^^^^^^^^^^^^^^^^^^^^^ 
+ * The code was written on Linux (Ubuntu 18.04.2 LTS) and tested for Raspbian GNU/Linux 9.4 (stretch)
+ * 
  * Warnings: Important notes for physical setup
  * ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
  * 1) Don't connect any motor to the motor controller! Otherwise the 
