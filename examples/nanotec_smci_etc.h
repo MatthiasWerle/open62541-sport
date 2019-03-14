@@ -567,7 +567,7 @@ readCurrentDataSource(UA_Server *server,
 
 		if (msg[0] != '\0'){
 			if ( (strpbrk(msg,MCLib[idx].cmd_read))[strlen(MCLib[idx].cmd_read)] != '\r'){
-				UA_Int32 value = atoi(strpbrk(msg, MCLib[idx].cmd_read)+strlen(MCLib[idx].cmd_read));							/* convert char* to int */
+				UA_Int32 value = atoi(strpbrk(msg, MCLib[idx].cmd_read)+strlen(MCLib[idx].cmd_read)); /* convert char* to int */
 				UA_Variant_setScalarCopy(&dataValue->value, &value, &UA_TYPES[UA_TYPES_INT32]);
 				dataValue->hasValue = true;											/* probably obsolet? */
 			}
@@ -594,9 +594,11 @@ writeCurrentDataSource(UA_Server *server,
 	char msg[30];
 
 	if(MCLib[idx].write){
+		printf("DEBUG0\n");
 		int* value = (int*)dataValue->value.data;
+		printf("DEBUG1\n");
 		if(context->MCObj->fd > 0){
-			MCmessage(context->MCObj->motorAddr, MCLib[idx].cmd_write, value, msg);						/* concatenate message */
+			MCmessage(context->MCObj->motorAddr, MCLib[idx].cmd_write, value, msg);		/* concatenate message */
 			tcflush(context->MCObj->fd, TCIFLUSH); 										/* flush input buffer */
 			sport_send_msg(msg, context->MCObj->fd);									/* send message */
 	#ifdef READ_RESPONSE
