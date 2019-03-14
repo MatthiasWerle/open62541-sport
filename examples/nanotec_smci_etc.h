@@ -546,7 +546,6 @@ addCurrentTraversePathDataSourceVariable(UA_Server *server, const UA_NodeId *nod
                                         traversePathDataSource, (void*)global, NULL);
 }
 
-#ifdef NEW
 /* Generic request to return a single current parameter from motor controller and optionally to overwrite it.
  * nodeContext  */
 static UA_StatusCode
@@ -639,13 +638,15 @@ addCurrentDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCDataS
 
     UA_DataSource dataSource;
 	dataSource.read = readCurrentDataSource;
-	dataSource.write = writeCurrentDataSource;
+	if(MCLib[idx].write)
+		dataSource.write = writeCurrentDataSource;
+	else
+		dataSource.write = UA_STATUSCODE_GOOD;
     UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
                                         parentReferenceNodeId, currentName,
                                         variableTypeNodeId, attr,
                                         dataSource, (void*)context, NULL);
 }
-#endif
 
 /******************************************************************/
 /* CALLBACK METHODS FOR OBJECT INSTANCES OF TYPE MOTOR CONTROLLER */
