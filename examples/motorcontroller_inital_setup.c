@@ -1,5 +1,6 @@
 /* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
- * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. */
+ * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. 
+ * Peace, Love and Libertarian Anarchy, dear comrades! (A) */
 
 /**
  * Nanotec Motor controller configurations initial setup
@@ -20,7 +21,7 @@
  * ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
  * 1) Don't connect any motor to the motor controller! Otherwise the 
  * default configurations for phase current can damage the motor! 
- * 2) Connect only a single motor controller to the server host. */
+ * 2) Connect only a single motor controller to the host. */
 
 #include <signal.h>
 #include <ua_server.h>

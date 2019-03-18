@@ -1,5 +1,6 @@
 /* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
- * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. */
+ * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. 
+ * Peace, Love and Libertarian Anarchy, dear comrades! (A) */
 
 #if !defined(READ_TIMEOUT_S) 
 	#define READ_TIMEOUT_S 0
@@ -44,12 +45,12 @@ set_interface_attribs(int fd, int speed)
 	cfsetispeed(&tty, (speed_t)speed);					/* baudrate input e.g. speed = B115200 */
 
 	/* control modes: set flags to customize tty serial communication options */
-    tty.c_cflag |= (unsigned int)(CLOCAL | CREAD); 		/* ignore modem control lines; enable receiver */
-    tty.c_cflag |= (unsigned int)CSIZE;					/* character size mask */
-    tty.c_cflag |= (unsigned int)CS8;         			/* 8-bit characters */
-    tty.c_cflag &= ~(unsigned int)PARENB;				/* no parity bit */
-    tty.c_cflag &= ~(unsigned int)CSTOPB;				/* only need 1 stop bit */
-    // tty.c_cflag &= ~CRTSCTS; /* no hardware flowcontrol */
+	tty.c_cflag |= (unsigned int)(CLOCAL | CREAD); 		/* ignore modem control lines; enable receiver */
+	tty.c_cflag |= (unsigned int)CSIZE;					/* character size mask */
+	tty.c_cflag |= (unsigned int)CS8;         			/* 8-bit characters */
+	tty.c_cflag &= ~(unsigned int)PARENB;				/* no parity bit */
+	tty.c_cflag &= ~(unsigned int)CSTOPB;				/* only need 1 stop bit */
+	// tty.c_cflag &= ~CRTSCTS; 						/* no hardware flowcontrol */
 
 	/* setup for canonical mode where the buffer is sent after a carriage return or line feed was received */
 	/* input modes */
@@ -78,7 +79,7 @@ sport_send_msg(char* msg, int fd)
 	if (fd != -1){
 		/* check buffer */
 		int ready;
-		struct timeval tv = {WRITE_TIMEOUT_S, WRITE_TIMEOUT_MS};													/* Timeout in Sekunden, in micro-Sekunden */
+		struct timeval tv = {WRITE_TIMEOUT_S, WRITE_TIMEOUT_MS};												/* Timeout in Sekunden, in micro-Sekunden */
 		fd_set writefds;
 		FD_ZERO(&writefds);
 		FD_SET(fd, &writefds);
@@ -89,7 +90,7 @@ sport_send_msg(char* msg, int fd)
 			int wlen = (int)write(fd, msg, strlen(msg)); 														/* number of bytes written */
 			/* user info */
 			if (wlen >= 0) {
-				char msg_cut[strlen(msg)];
+				char msg_cut[strlen(msg)+1];
 				strcpy(msg_cut, msg);
 				msg_cut[strlen(msg)-1] = '\0';
 				printf("sent %d bytes on fd %d as msg = \"%s\\r\" \n", (int)strlen(msg), fd, msg_cut);
@@ -128,7 +129,7 @@ sport_read_msg(char* msg, int fd)
 	if (fd != -1){
 		/* check buffer */
 		int ready;
-		struct timeval tv = {READ_TIMEOUT_S, READ_TIMEOUT_MS};											/* Timeout in Sekunden, in micro-Sekunden */
+		struct timeval tv = {READ_TIMEOUT_S, READ_TIMEOUT_MS};												/* Timeout in Sekunden, in micro-Sekunden */
 		fd_set readfds;
 		FD_ZERO(&readfds);
 		FD_SET(fd, &readfds);

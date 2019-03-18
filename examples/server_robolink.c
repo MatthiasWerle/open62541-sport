@@ -1,5 +1,6 @@
 /* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
- * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. */
+ * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. 
+ * Peace, Love and Libertarian Anarchy, dear comrades! (A) */
 
 /**
  * OPC UA server implementation for control of multiple Nanotec motor controllers
@@ -97,12 +98,13 @@ int main(int argc, char** argv){
 	/* Example Assignment of motor controller command*/
 	/* TODO: Write commands into a csv file and read it from here */
 	//enum {minussign, dollarsign, percentsign, _aaa, _accel, _aoa, _b, _B, _baud, _brake_ta, _brake_tb, _brake_tc, _ca, _Capt_iAnalog}; /* not completed yet */
-	enum {s, W};
+	enum {s, p, W, v, dollarsign};
 	MCLib[s].name = "traversepath";
 	MCLib[s].nameDisplay = "traverse-path";
 	MCLib[s].write = 1;
 	MCLib[s].cmd_write = "s";
 	MCLib[s].cmd_read = "Zs";
+	MCLib[s].type = 0;
 	MCLib[s].min = -100000000;
 	MCLib[s].max = +100000000;
 	MCLib[W].name = "repeats";
@@ -110,9 +112,33 @@ int main(int argc, char** argv){
 	MCLib[W].write = 1;
 	MCLib[W].cmd_write = "W";
 	MCLib[W].cmd_read = "ZW";
+	MCLib[W].type = 0;
 	MCLib[W].min = 0;
 	MCLib[W].max = 254;
-//	MCLib[p]{"positionmode", "position-mode", 1, "p", "Zp", 1, 19}; 		/* syntax only possible for inital declaration */
+	MCLib[v].name = "firmwareversion";
+	MCLib[v].nameDisplay = "firmware-version";
+	MCLib[v].write = 0;
+	MCLib[v].cmd_write = "";
+	MCLib[v].cmd_read = "v";
+	MCLib[v].type = 1;
+	MCLib[v].min = 0;
+	MCLib[v].max = 0;
+	MCLib[p].name = "positionmode";
+	MCLib[p].nameDisplay = "position-mode";
+	MCLib[p].write = 1;
+	MCLib[p].cmd_write = "p";
+	MCLib[p].cmd_read = "Zp";
+	MCLib[p].type = 3;
+	MCLib[p].min = 1;
+	MCLib[p].max = 19;
+	MCLib[dollarsign].name = "status";
+	MCLib[dollarsign].nameDisplay = "status-description";
+	MCLib[dollarsign].write = 0;
+	MCLib[dollarsign].cmd_write = "";
+	MCLib[dollarsign].cmd_read = "$";
+	MCLib[dollarsign].type = 2;
+	MCLib[dollarsign].min = 0;
+	MCLib[dollarsign].max = 0;
 
 	/* ASSIGNMENTS */
 	/* Assign pointer to first array element of struct array with motor controller commands to context of motor controller object instances */
@@ -125,7 +151,7 @@ int main(int argc, char** argv){
 
 	/* Assign ttynames for every object instance */
 	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
-		ttyname[i] = (char*)malloc(sizeof(char*) * SIZE_TTYNAME);
+		ttyname[i] = (char*)malloc(sizeof(char) * SIZE_TTYNAME);
 		#ifdef DEFAULT_TTYNAME
 			#if (N_PORTS == 1)									/* each motor controller connected to same port */
 				strcpy(ttyname[i], "/dev/ttyUSB0");
@@ -166,9 +192,9 @@ int main(int argc, char** argv){
 	/* Assign NodeId's, browsenames and setup serial port connection settings */
 	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		/* Assign NodeId's for every object instance of a motor controller */
-		nameId[i] = (char*)malloc(sizeof(char*) * 10);
-		nameNr[i] = (char*)malloc(sizeof(char*) * 10);
-		nameMSet[i] = (char*)malloc(sizeof(char*) * 25);
+		nameId[i] = (char*)malloc(sizeof(char) * 10);
+		nameNr[i] = (char*)malloc(sizeof(char) * 10);
+		nameMSet[i] = (char*)malloc(sizeof(char) * 25);
 		strcpy(*(nameId+i), "MCId");
 		strcpy(*(nameMSet+i), "MotorSettingsMC");
 		sprintf(*(nameNr+i), "%d", i+1);
@@ -179,7 +205,7 @@ int main(int argc, char** argv){
 		nodeIdMSet[i] = UA_NODEID_STRING(1, *(nameMSet+i));
 
 		/* Assign browsenames for every object instance of a motor controller */
-		nameBrowse[i] = (char*)malloc(sizeof(char*) * 50);
+		nameBrowse[i] = (char*)malloc(sizeof(char) * 50);
 		strcpy(*(nameBrowse+i), "motorController");
 		sprintf(*(nameNr+i), "%d", i+1);
 		strcat(*(nameBrowse+i), *(nameNr+i));
@@ -198,31 +224,25 @@ int main(int argc, char** argv){
 #endif
 	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		addMotorControllerObjectInstance(server, *(nameBrowse+i), *(nameNr+i), &nodeIdMC[i], &MCObj[i]);
-		
-		/* add methods to object instance */
+
+		/* add callback methods to object instance */
 		addStartMotorMethod(server, &nodeIdMC[i], &MCObj[i]);
 		addStopMotorMethod(server, &nodeIdMC[i], &MCObj[i]);
 		addSportSendMsgMethod(server, &nodeIdMC[i], &MCObj[i]);
 		addReadSetMethod(server, &nodeIdMC[i], &MCObj[i]);
-		
+
 		/* add datasources to motor controller object instance */
 		addCurrentAngleDataSourceVariable(server, &nodeIdMC[i], &MCObj[i]);				/* hard coded data source */
-		addCurrentStatusDataSourceVariable(server, &nodeIdMC[i], &MCObj[i]);			/* hard coded data source */
-		
+
 		/* add motor settings object instance as child to motor controller object instance */
 		addMotorSettingsObjectInstance(server, nameMSet[i], &nodeIdMSet[i], &nodeIdMC[i], &MCObj[i]);
 
-		/* add datasources to motor settings object instance */
-		addCurrentPositionModeDataSourceVariable(server, &nodeIdMSet[i], &MCObj[i]);	/* hard coded data source */
-//		addCurrentTraversePathDataSourceVariable(server, &nodeIdMSet[i], &MCObj[i]);	/* hard coded data source */
-	
-		/* add datasources for every command in command list */
+		/* add datasources for every command in command list to motor controller object instance*/
 		for(j = 0; j < N_MCCOMMANDS; j++){
 			context[i][j].idx = &MCIdx[j];
 			context[i][j].MCObj = &MCObj[i];
 			addCurrentDataSourceVariable(server,  &nodeIdMC[i], &context[i][j]);
 		}
-	
 	}
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Object types defined and all object instances created\n");
 

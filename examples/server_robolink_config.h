@@ -1,5 +1,6 @@
 /* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
- * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. */
+ * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. 
+ * Peace, Love and Libertarian Anarchy, dear comrades! (A) */
 
 /**
  * Header file for OPC UA server implementation for control of multiple Nanotec motor controllers
@@ -10,7 +11,7 @@
  *
  * Description: Code utilities
  * ^^^^^^^^^^^^^^^^^^^^^^^^^^^
- * The following code will define ḿacros which can be adjusted by users to configure server_robolink.c */
+ * The following code will define macros which can be adjusted by users to configure server_robolink.c */
 
 /**********/
 /* MACROS */
@@ -23,7 +24,7 @@
 #define SIZE_TTYNAME 50
 #define N_MOTORCONTROLLERS 3 		/* max. number of motor controllers */
 #define N_PORTS 1					/* number of ports, either 1 or N_MOTORCONTROLLERS (1 if all motor controllers are connected to the same port or N if each controller is connected to a single port) */
-#define N_MCCOMMANDS 2				/* WIP: number of currently defined motor controller commands */
+#define N_MCCOMMANDS 5				/* WIP: number of currently defined motor controller commands */
 
 /* options which can be commented out */
 #define DEFAULT_TTYNAME

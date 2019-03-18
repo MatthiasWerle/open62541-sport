@@ -1,5 +1,6 @@
 /* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
- * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. */
+ * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. 
+ * Peace, Love and Libertarian Anarchy, dear comrades! (A) */
 
 /**
  * Header for Nanotec motor controller implementation on OPC UA Server
@@ -24,6 +25,7 @@ typedef struct {
 	bool write;								/* value writable? */
 	char* cmd_write;						/* write command according to motor controller programming manual */
 	char* cmd_read;							/* read command according to motor controller programming manual */
+	char type;								/* 0 = numeric; 1 = string; 2 = statusbitmask; 3 = position mode number */
 	int min;								/* minimal allowed value */
 	int max;								/* maximal allowed value */
 } MCCommand;								/* struct variable to parametrize one motor controller command */
@@ -185,10 +187,56 @@ MCmessage(const char* motorAddr, const char* cmd, const int* valPtr, char* msg)
 	return UA_STATUSCODE_GOOD;
 }
 
+/* Look-up-table for status 8-bit bitmask */
+static UA_INLINE UA_StatusCode
+get_status_description(UA_Int32 *status, UA_String* status_description){
+	char* stat = (char*) malloc(1); memset(stat, '\0', 1);
+	if (*status & 1){
+		stat = (char*)realloc(stat, strlen(stat)+26);
+		strcat(stat, "Bit0: Control is ready\n");
+	}
+	else if ((*status & 1) == 0){
+		stat = (char*)realloc(stat, strlen(stat)+25);
+		strcat(stat, "Bit0: Control is busy\n");
+	}
+	if (*status & 2){
+		stat = (char*)realloc(stat, strlen(stat)+33);
+		strcat(stat, "Bit1: Nullposition is reached\n");
+	}
+	if (*status & 4){
+		stat = (char*)realloc(stat, strlen(stat)+24);
+		strcat(stat, "Bit2: Position Error\n");
+	}
+	if (*status & 8){
+		stat = (char*)realloc(stat, strlen(stat)+163);
+		strcat(stat, "Bit3: Input1 is set while control is ready. Happens when the control was startet via input1 and the control was faster ready again than the input could be set.\n");
+	}
+	if (*status & 16){
+		stat = (char*)realloc(stat, strlen(stat)+91);
+		strcat(stat, "Bit4: Warning: This bit is set, though it's designated to be unset always\n");
+	}
+	if ((*status & 32) == 0){
+		stat = (char*)realloc(stat, strlen(stat)+91);
+		strcat(stat, "Bit5: Warning: This bit is unset, though it's designated to be set always\n");
+	}
+	if (*status & 64){
+		stat = (char*)realloc(stat, strlen(stat)+91);
+		strcat(stat, "Bit6: Warning: This bit is set, though it's designated to be unset always\n");
+	}
+	if ((*status & 128) == 0){
+		stat = (char*)realloc(stat, strlen(stat)+91);
+		strcat(stat, "Bit7: Warning: This bit is unset, though it's designated to be set always\n");
+	}
+	*status_description = UA_STRING_ALLOC(stat);
+	return UA_STATUSCODE_GOOD;
+}
+
+
 /* Look-up-table for the description of position modes */
 static UA_INLINE UA_StatusCode
-get_posMode_description(int posModeIdx, char* posMode){
-	switch(posModeIdx) {
+get_posMode_description(UA_Int32 *posModeIdx, UA_String* posMode_description){
+	char* posMode = (char*) malloc(1); memset(posMode, '\0', 1);
+	switch(*posModeIdx) {
 		case 1: strcpy(posMode, "relative pos. mode"); break;
 		case 2: strcpy(posMode, "absolut pos. mode"); break;
 		case 3: strcpy(posMode, "intern ref. traverse"); break;
@@ -210,6 +258,7 @@ get_posMode_description(int posModeIdx, char* posMode){
 		case 19: strcpy(posMode, "CL quick test mode 2"); break;
 		default: strcpy(posMode, "Couldn't find out which position mode is active"); break;
 	}
+	*posMode_description = UA_STRING_ALLOC(posMode);
 	return UA_STATUSCODE_GOOD;
 }
 /*************************/
@@ -301,251 +350,6 @@ addCurrentAngleDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MC
                                         angleDataSource, (void*)global, NULL);
 }
 
-/* Request to return motor status from motor controller, read response, 
- * overwrite value of datasource variable with status description and 
- * display numeric status with printf */
-static UA_StatusCode
-readCurrentStatus(UA_Server *server,
-                const UA_NodeId *sessionId, void *sessionContext,
-                const UA_NodeId *nodeId, void *nodeContext,
-                UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
-                UA_DataValue *dataValue) {
-	MCObjectInstanceContext *global = (MCObjectInstanceContext*)nodeContext;
-	char msg[30];
-	char* cmd = "$";
-	char* stat = (char*) malloc(1);
-	memset(stat, '\0', 1);
-
-	MCmessage(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
-	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
-	sport_send_msg(msg, global->fd);									/* send message */
-	sport_read_msg(msg, global->fd);									/* read response */
-
-	/* value of motor controller response should be an 8 bit bitmask, but is actually 24 bit long... */
-	if (msg[0] != '\0'){
-		if ( (strpbrk(msg,cmd))[strlen(cmd)] != '\0'){
-			UA_Int32 status = atoi(strpbrk(msg, cmd)+strlen(cmd));		/* convert char* to int */
-			if (status & 1){
-				stat = (char*)realloc(stat, strlen(stat)+26);
-				strcat(stat, "Bit0: Control is ready\n");
-			}
-			else if ((status & 1) == 0){
-				stat = (char*)realloc(stat, strlen(stat)+25);
-				strcat(stat, "Bit0: Control is busy\n");
-			}
-			if (status & 2){
-				stat = (char*)realloc(stat, strlen(stat)+33);
-				strcat(stat, "Bit1: Nullposition is reached\n");
-			}
-			if (status & 4){
-				stat = (char*)realloc(stat, strlen(stat)+24);
-				strcat(stat, "Bit2: Position Error\n");
-			}
-			if (status & 8){
-				stat = (char*)realloc(stat, strlen(stat)+163);
-				strcat(stat, "Bit3: Input1 is set while control is ready. Happens when the control was startet via input1 and the control was faster ready again than the input could be set.\n");
-			}
-			if (status & 16){
-				stat = (char*)realloc(stat, strlen(stat)+91);
-				strcat(stat, "Bit4: Warning: This bit is set, though it's designated to be unset always\n");
-			}
-			if ((status & 32) == 0){
-				stat = (char*)realloc(stat, strlen(stat)+91);
-				strcat(stat, "Bit5: Warning: This bit is unset, though it's designated to be set always\n");
-			}
-			if (status & 64){
-				stat = (char*)realloc(stat, strlen(stat)+91);
-				strcat(stat, "Bit6: Warning: This bit is set, though it's designated to be unset always\n");
-			}
-			if ((status & 128) == 0){
-				stat = (char*)realloc(stat, strlen(stat)+91);
-				strcat(stat, "Bit7: Warning: This bit is unset, though it's designated to be set always\n");
-			}
-			UA_String tmp = UA_STRING_ALLOC(stat);
-			UA_Variant_setScalarCopy(&dataValue->value, &tmp, &UA_TYPES[UA_TYPES_STRING]);
-			dataValue->hasValue = true;											/* probably obsolet? */
-		}
-		else
-			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Error: No response due to wrong motor adress \n");
-	}
-		
-    return UA_STATUSCODE_GOOD;
-}
-
-/* Adds current status of the motor as datasource variable to an object node of a motor controller instance
- * 
- * @param server The server object.
- * @param nodeId A pointer to the parent node Id
- * @param global A pointer to a struct of type MCObjectInstanceContext */
-static UA_INLINE  void
-addCurrentStatusDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCObjectInstanceContext *global) {
-	char name[50];
-	strcpy(name, (char*)((*nodeId).identifier.string.data));
-	strcat(name, "-current-status-datasource");
-
-    UA_VariableAttributes attr = UA_VariableAttributes_default;
-    attr.displayName = UA_LOCALIZEDTEXT("en-US", "status - data source");
-    attr.accessLevel = UA_ACCESSLEVELMASK_READ;
-
-    UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
-    UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
-    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-    UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
-
-    UA_DataSource statusDataSource;
-	statusDataSource.read = readCurrentStatus;
-	statusDataSource.write = UA_STATUSCODE_GOOD;								/* just in case, because it was necessary to avoid segmentation fault at another UA_Server_addDataSourceVariableNode method but only if run on raspbian  */
-    UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
-                                        parentReferenceNodeId, currentName,
-                                        variableTypeNodeId, attr,
-                                        statusDataSource, (void*)global, NULL);
-}
-
-/* Request to return motors current position from motor controller, read response, 
- * overwrite value of datasource variable and display it with printf */
-static UA_StatusCode
-readCurrentPositionMode(UA_Server *server,
-                const UA_NodeId *sessionId, void *sessionContext,
-                const UA_NodeId *nodeId, void *nodeContext,
-                UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
-                UA_DataValue *dataValue) {
-	MCObjectInstanceContext *global = (MCObjectInstanceContext*)nodeContext;
-	char msg[30];
-	char* cmd = "Zp";
-	char posMode[50];
-	int posModeIdx;
-	MCmessage(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
-	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
-	sport_send_msg(msg, global->fd);									/* send message */
-	sport_read_msg(msg, global->fd);									/* read response */
-	if (msg[0] != '\0'){
-		if ( (strpbrk(msg,cmd))[strlen(cmd)] != '\r'){
-			posModeIdx = atoi(strpbrk(msg, cmd)+strlen(cmd));
-			printf("\n\n posModeIdx = %d\n", posModeIdx);
-			get_posMode_description(posModeIdx, posMode);
-			printf("posMode = %s\n\n", posMode);
-			
-			UA_String tmp = UA_STRING_ALLOC(posMode);
-			UA_Variant_setScalarCopy(&dataValue->value, &tmp, &UA_TYPES[UA_TYPES_STRING]);
-			dataValue->hasValue = true;											/* probably obsolet? */
-		}
-		else
-			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Error: No response due to wrong motor adress \n");
-	}
-    return UA_STATUSCODE_GOOD;
-}
-
-/* Adds current position mode of the motor as datasource variable to an object node of a motor controller instance
- * 
- * @param server The server object.
- * @param nodeId A pointer to the parent node Id
- * @param global A pointer to a struct of type MCObjectInstanceContext */
-static UA_INLINE void
-addCurrentPositionModeDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCObjectInstanceContext *global) {
-	char name[50];
-	strcpy(name, (char*)((*nodeId).identifier.string.data));
-	strcat(name, "-current-position-mode-datasource");
-
-    UA_VariableAttributes attr = UA_VariableAttributes_default;
-    attr.displayName = UA_LOCALIZEDTEXT("en-US", "position-mode - data source");
-    attr.accessLevel = UA_ACCESSLEVELMASK_READ;
-
-    UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
-    UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
-    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-    UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
-    UA_DataSource posModeDataSource;
-	posModeDataSource.read = readCurrentPositionMode;
-	posModeDataSource.write = UA_STATUSCODE_GOOD;								/* only necessary to avoid segmentation fault if run on raspbian */
-    UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
-                                        parentReferenceNodeId, currentName,
-                                        variableTypeNodeId, attr,
-                                        posModeDataSource, (void*)global, NULL);
-}
-
-/* Request to return current traverse path from motor controller, read response, 
- * overwrite value of datasource variable and display it with printf */
-static UA_StatusCode
-readCurrentTraversePath(UA_Server *server,
-                const UA_NodeId *sessionId, void *sessionContext,
-                const UA_NodeId *nodeId, void *nodeContext,
-                UA_Boolean sourceTimeStamp, const UA_NumericRange *range,
-                UA_DataValue *dataValue) {
-	MCObjectInstanceContext *global = (MCObjectInstanceContext*)nodeContext;
-	char msg[30];
-	char* cmd = "Zs";													/* Command to return position */
-	MCmessage(global->motorAddr, cmd, NULL, msg);						/* concatenate message */
-	tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
-	sport_send_msg(msg, global->fd);									/* send message */
-	sport_read_msg(msg, global->fd);									/* read response */
-
-	if (msg[0] != '\0'){
-		if ( (strpbrk(msg,cmd))[strlen(cmd)] != '\r'){
-			UA_Int32 traversePath = atoi(strpbrk(msg, cmd)+strlen(cmd));							/* convert char* to int */
-			UA_Variant_setScalarCopy(&dataValue->value, &traversePath, &UA_TYPES[UA_TYPES_INT32]);
-			dataValue->hasValue = true;											/* probably obsolet? */
-		}
-		else{
-			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Error: No response due to wrong motor adress \n");
-			printf("msg = %s\n", msg);
-		}
-	}
-    return UA_STATUSCODE_GOOD;
-}
-
-/* Adjusts the traverse path of the motor controller to absolute, sets it's traverse path and runs the motor */
-static UA_StatusCode
-writeCurrentTraversePath(UA_Server *server,
-                 const UA_NodeId *sessionId, void *sessionContext,
-                 const UA_NodeId *nodeId, void *nodeContext,
-                 const UA_NumericRange *range, const UA_DataValue *dataValue) {
-	MCObjectInstanceContext *global = (MCObjectInstanceContext*)nodeContext;
-	char msg[30];
-	char* cmd = "s";														/* Command to set traverse path */
-	int* traversePath = (int*)dataValue->value.data;
-	if(global->fd > 0){
-		MCmessage(global->motorAddr, cmd, traversePath, msg);				/* concatenate message */
-		tcflush(global->fd, TCIFLUSH); 										/* flush input buffer */
-		sport_send_msg(msg, global->fd);									/* send message */
-#ifdef READ_RESPONSE
-		sport_read_msg(msg, global->fd);									/* read response */
-#endif
-		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Motors traverse path is set");
-	}
-	else
-		UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Bad filedescriptor! Can't send message.");
-	return UA_STATUSCODE_GOOD;
-}
-
-/* Adds current traverse path of the motor as datasource variable to an object node of a motor controller instance
- * 
- * @param server The server object.
- * @param nodeId A pointer to the parent node Id
- * @param global A pointer to a struct of type MCObjectInstanceContext */
-static UA_INLINE void
-addCurrentTraversePathDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCObjectInstanceContext *global) {
-	char name[50];
-	strcpy(name, (char*)((*nodeId).identifier.string.data));
-	strcat(name, "-current-traverse-path-datasource");
-
-    UA_VariableAttributes attr = UA_VariableAttributes_default;
-    attr.displayName = UA_LOCALIZEDTEXT("en-US", "traverse path - data source");
-    attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
-
-    UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
-    UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
-    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-    UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
-
-    UA_DataSource traversePathDataSource;
-	traversePathDataSource.read = readCurrentTraversePath;
-	traversePathDataSource.write = writeCurrentTraversePath;
-    UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
-                                        parentReferenceNodeId, currentName,
-                                        variableTypeNodeId, attr,
-                                        traversePathDataSource, (void*)global, NULL);
-}
-
 /* Generic request to return a single current parameter from motor controller and optionally to overwrite it.
  * nodeContext  */
 static UA_StatusCode
@@ -567,12 +371,41 @@ readCurrentDataSource(UA_Server *server,
 
 		if (msg[0] != '\0'){
 			if ( (strpbrk(msg,MCLib[idx].cmd_read))[strlen(MCLib[idx].cmd_read)] != '\r'){
-				UA_Int32 value = atoi(strpbrk(msg, MCLib[idx].cmd_read)+strlen(MCLib[idx].cmd_read)); /* convert char* to int */
-				UA_Variant_setScalarCopy(&dataValue->value, &value, &UA_TYPES[UA_TYPES_INT32]);
-				dataValue->hasValue = true;											/* probably obsolet? */
+				switch(MCLib[idx].type){
+					case 0: ;  														/* case: numeric */
+						UA_Int32 value_int = atoi(strpbrk(msg, MCLib[idx].cmd_read)+strlen(MCLib[idx].cmd_read)); /* convert part of char[] to int */
+						UA_Variant_setScalarCopy(&dataValue->value, &value_int, &UA_TYPES[UA_TYPES_INT32]);
+						dataValue->hasValue = true;
+					break;
+					case 1: ; 														/* case: string */
+						UA_String value_str = UA_STRING(strpbrk(msg, MCLib[idx].cmd_read)+strlen(MCLib[idx].cmd_read)); 
+						UA_Variant_setScalarCopy(&dataValue->value, &value_str, &UA_TYPES[UA_TYPES_STRING]);
+						dataValue->hasValue = true;
+					break;
+					case 2: ; 														/* case: status */
+						UA_Int32 status = atoi(strpbrk(msg, MCLib[idx].cmd_read)+strlen(MCLib[idx].cmd_read));		/* convert part of char[] to int */
+						UA_String status_description = UA_STRING("");
+						get_status_description(&status, &status_description);		/* user readable description */
+						UA_Variant_setScalarCopy(&dataValue->value, &status_description, &UA_TYPES[UA_TYPES_STRING]);
+						dataValue->hasValue = true;
+					break;
+					case 3: ; 														/* case: position mode */
+						UA_Int32 posmode = atoi(strpbrk(msg, MCLib[idx].cmd_read)+strlen(MCLib[idx].cmd_read));		/* convert part of char[] to int */
+						UA_String posmode_description = UA_STRING("");
+						get_posMode_description((UA_Int32*)&posmode, &posmode_description);		/* user readable description */
+						UA_Variant_setScalarCopy(&dataValue->value, &posmode_description, &UA_TYPES[UA_TYPES_STRING]);
+						dataValue->hasValue = true;
+					break;
+					default: ;														/* case: default: like numeric case */
+						UA_Int32 value_def = atoi(strpbrk(msg, MCLib[idx].cmd_read)+strlen(MCLib[idx].cmd_read)); /* convert part of char[] to int */
+						UA_Variant_setScalarCopy(&dataValue->value, &value_def, &UA_TYPES[UA_TYPES_INT32]);
+						dataValue->hasValue = true;
+					break;
+				}
+				
 			}
 			else{
-				UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Error: No response due to wrong motor adress \n");
+				UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_SERVER, "Error: No response probably due to wrong motor adress \n");
 				printf("msg = %s\n", msg);
 			}
 		}
@@ -594,9 +427,7 @@ writeCurrentDataSource(UA_Server *server,
 	char msg[30];
 
 	if(MCLib[idx].write){
-		printf("DEBUG0\n");
 		int* value = (int*)dataValue->value.data;
-		printf("DEBUG1\n");
 		if(context->MCObj->fd > 0){
 			MCmessage(context->MCObj->motorAddr, MCLib[idx].cmd_write, value, msg);		/* concatenate message */
 			tcflush(context->MCObj->fd, TCIFLUSH); 										/* flush input buffer */
@@ -626,28 +457,28 @@ addCurrentDataSourceVariable(UA_Server *server, const UA_NodeId *nodeId, MCDataS
 	strcpy(name, (char*)((*nodeId).identifier.string.data));
 	strcat(name, MCLib[idx].name);
 
-    UA_VariableAttributes attr = UA_VariableAttributes_default;
-    attr.displayName = UA_LOCALIZEDTEXT("en-US", MCLib[idx].nameDisplay);
+	UA_VariableAttributes attr = UA_VariableAttributes_default;
+	attr.displayName = UA_LOCALIZEDTEXT("en-US", MCLib[idx].nameDisplay);
 	if(MCLib[idx].write)
 		attr.accessLevel = UA_ACCESSLEVELMASK_READ | UA_ACCESSLEVELMASK_WRITE;
 	else
 		attr.accessLevel = UA_ACCESSLEVELMASK_READ;
 
-    UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
-    UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
-    UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
-    UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
+	UA_NodeId currentNodeId = UA_NODEID_STRING(1, name);
+	UA_QualifiedName currentName = UA_QUALIFIEDNAME(1, name);
+	UA_NodeId parentReferenceNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES);
+	UA_NodeId variableTypeNodeId = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
 
-    UA_DataSource dataSource;
+	UA_DataSource dataSource;
 	dataSource.read = readCurrentDataSource;
 	if(MCLib[idx].write)
 		dataSource.write = writeCurrentDataSource;
 	else
-		dataSource.write = UA_STATUSCODE_GOOD;
-    UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
-                                        parentReferenceNodeId, currentName,
-                                        variableTypeNodeId, attr,
-                                        dataSource, (void*)context, NULL);
+		dataSource.write = NULL;
+	UA_Server_addDataSourceVariableNode(server, currentNodeId, *nodeId,
+										parentReferenceNodeId, currentName,
+										variableTypeNodeId, attr,
+										dataSource, (void*)context, NULL);
 }
 
 /******************************************************************/
@@ -784,14 +615,11 @@ readSetMethodCallback(UA_Server *server,
 
 				int i = 0;
 				int parameters[12] = {atoi(strp), atoi(strs), atoi(stru), atoi(stro), atoi(strn), atoi(strb), atoi(strB), atoi(strd), atoi(strt), atoi(strW), atoi(strP), atoi(strN)};
-				char posMode[50];
-				printf("posMode = %d\n", parameters[0]);
-				get_posMode_description(parameters[0], posMode);
-
+				UA_String posMode_description = UA_STRING("");
 				UA_String tmp = UA_STRING_ALLOC(msg);
+				get_posMode_description((UA_Int32*)&parameters[0], &posMode_description);
 				UA_Variant_setScalarCopy(output, &tmp, &UA_TYPES[UA_TYPES_STRING]); /* user output; TODO: single output for every extracted numerical variable of the read set */
-				tmp = UA_STRING_ALLOC(posMode);
-				UA_Variant_setScalarCopy(output+1, &tmp, &UA_TYPES[UA_TYPES_STRING]); /* user output; TODO: single output for every extracted numerical variable of the read set */
+				UA_Variant_setScalarCopy(output+1, &posMode_description, &UA_TYPES[UA_TYPES_STRING]); /* user output; TODO: single output for every extracted numerical variable of the read set */
 				for (i=2; i<=12; i++)
 					UA_Variant_setScalarCopy(output+i, &parameters[i-1], &UA_TYPES[UA_TYPES_INT32]);
 			}

@@ -1,3 +1,7 @@
+/* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
+ * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. 
+ * Peace, Love and Libertarian Anarchy, dear comrades! (A) */
+
 #####################################
 # INSTRUCTIONS: RASPI REMOTE ACCESS #
 #####################################
@@ -10,9 +14,9 @@
 2) establish ssh connection for remote control in terminal with following command:
 	ssh <username_on_device>@<ip_addr>
 
-2.1) optional stuff for more handy development:
-	generate mount folder (terminal: mkdir <foldername_incl_path>)
-	mount files from raspi via ssh fileshare in mount folder with following command: (hardcode further below)
+2.1) optional stuff for more handy development through ssh fileshare between systems:
+	create folder as mount point for remote data (terminal: mkdir <foldername_incl_path>)
+	mount files from raspi via ssh fileshare in mount folder with following command:
 	sshfs <username_on_device>@<ip_addr_on_device>:<directory_path> <mount_path>
 
 	ssh access via filemanager (e.g. thunar) with path as followed:
@@ -26,27 +30,32 @@
 1) clone or download git project 
 	https://github.com/MatthiasWerle/open62541-sport.git
 
-2) build examples (server_robolink.c and motorcontroller_inital_setup.c)
+2) build examples (server_robolink.c and motorcontroller_inital_setup.c) as in open62541 documentation:
+	https://open62541.org/doc/current/building.html
 
-###########################################################
-# INSTRUCTIONS: SETUP COMMUNICATION WITH MOTOR CONTROLLER #
-###########################################################
-1) phys. connect a single(!) motorcontroller according to technical manual to raspi
-	components: energy supply 24V DC, motor(opt. add. encoder), raspi via adapter (e.g. usb-rs485-converter(cp210x))
+3) For initial setup: Follow INSTRUCTIONS: SETUP COMMUNICATION WITH MOTORCONTROLLERS below
 
-2) find name of device file for motor controller respectively adapter (e.g. usb-rs485-converter(cp210x)) connected to raspi 
+4) phys. connect all motor controllers to power supply, motors (opt. with additional encoders) and the host computer (e.g. raspberry pi)
+
+5) adjust server_robolink_config.h according to number of motor controllers and number of used ports for them
+
+6) build server_robolink.c then run it's build OPC_UA server server_robolink
+
+############################################################
+# INSTRUCTIONS: SETUP COMMUNICATION WITH MOTOR CONTROLLERS #
+############################################################
+1) phys. connect a single(!) motorcontroller according to it's technical manual to host computer (e.g. raspberry pi) and power source
+	components: energy supply 24V DC, host connection (e.g. usb-rs485-converter(cp210x))
+	warning: LEAVE MOTOR DISCONNECTED BEFORE THE SETUP IS FINISHED
+
+2) find name of block device file e.g. "/dev/ttyUSB0" for motor controller respectively adapter (e.g. usb-rs485-converter(cp210x)) connected to host computer 
 	use following command in ssh terminal:
 	dmesg | grep tty
 
-3) run OPC_UA server motorcontroller_initial_setup
-	follow code instructions
-
-4) assign individual motor adresses for every single motorcontroller which should act asynchronous to the others 
-	herefor repeat steps 1) to 3)
-
-5) connect all motorcontrollers to raspi
-
-6) run OPC_UA server server_robolink
+3) run motorcontroller_initial_setup
+	follow code instructions to assign individual motor adresses and configure phase currents according to motor specs for every single motorcontroller
+	
+4) repeat steps 1) to 3) for every motor controller
 
 ####################################################
 # NOTES: list connected devices with UNIX commands #
