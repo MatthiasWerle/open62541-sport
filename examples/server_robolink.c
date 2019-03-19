@@ -59,7 +59,7 @@
 /* TODO: WORK IN PROGRESS */		/* CTRL+F: "TODO" or "WIP" */
 /**************************/
 
-//#define WIP 
+#define WIP 
 
 /*********************************/
 /* FUNCTIONS AND TYPEDEFINITIONS */
@@ -200,7 +200,7 @@ int main(int argc, char** argv){
 	if (MCLibFile == NULL){
 		fprintf(stderr, "\nError opening file MCLib.csv\n");
 		exit(1);
-	}l
+	}
 
 	/* TODO: Read correctly every field and assign MCLib[]-Arrayelements */
 	/* Read MCLib.csv file content till end of file */
@@ -216,6 +216,8 @@ int main(int argc, char** argv){
 		field = strtok(NULL, delims);
 		MCLib[j].write = atoi(field);
 		MCLib[j].cmd_write = strtok(NULL, delims);
+		if (strcmp(MCLib[j].cmd_write, "empty")) 				/* doesn't work */
+			MCLib[j].cmd_write[0] = '\0';
 		MCLib[j].cmd_read = strtok(NULL, delims);
 		field = strtok(NULL, delims);
 		MCLib[j].min = atoi(field);
@@ -280,8 +282,14 @@ int main(int argc, char** argv){
 	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		/* Assign NodeId's for every object instance of a motor controller */
 		nameId[i] = (char*)malloc(sizeof(char) * 10);
+		if (nameId[i] == NULL)
+			printf("\nNo free memory space for nameId[%d] available.\n", i);
 		nameNr[i] = (char*)malloc(sizeof(char) * 10);
-		nameMSet[i] = (char*)malloc(sizeof(char) * 25);
+		if (nameNr[i] == NULL)
+			printf("\nNo free memory space for nameNr[%d] available.\n", i);
+		nameMSet[i] = (char*)malloc(sizeof(char) * 50);
+		if (nameMSet[i] == NULL)
+			printf("\nNo free memory space for NameId[%d] available.\n", i);
 		strcpy(*(nameId+i), "MCId");
 		strcpy(*(nameMSet+i), "MotorSettingsMC");
 		sprintf(*(nameNr+i), "%d", i+1);
@@ -293,6 +301,8 @@ int main(int argc, char** argv){
 
 		/* Assign browsenames for every object instance of a motor controller */
 		nameBrowse[i] = (char*)malloc(sizeof(char) * 50);
+		if (nameBrowse[i] == NULL)
+			printf("\nNo free memory space for nameBrowse[%d] available.\n", i);
 		strcpy(*(nameBrowse+i), "motorController");
 		sprintf(*(nameNr+i), "%d", i+1);
 		strcat(*(nameBrowse+i), *(nameNr+i));
@@ -311,12 +321,13 @@ int main(int argc, char** argv){
 #endif
 	for (i=0; i<N_MOTORCONTROLLERS; i=i+1){
 		addMotorControllerObjectInstance(server, *(nameBrowse+i), *(nameNr+i), &nodeIdMC[i], &MCObj[i]);
-
+		printf("Added motor controller %d\n",i+1);
 		/* add callback methods to object instance */
 		addStartMotorMethod(server, &nodeIdMC[i], &MCObj[i]);
 		addStopMotorMethod(server, &nodeIdMC[i], &MCObj[i]);
 		addSportSendMsgMethod(server, &nodeIdMC[i], &MCObj[i]);
 		addReadSetMethod(server, &nodeIdMC[i], &MCObj[i]);
+		printf("Added callback methods for motor controller %d\n",i+1);
 
 		/* add datasources to motor controller object instance */
 		addCurrentAngleDataSourceVariable(server, &nodeIdMC[i], &MCObj[i]);				/* hard coded data source */
@@ -329,6 +340,7 @@ int main(int argc, char** argv){
 			context[i][j].idx = &MCIdx[j];
 			context[i][j].MCObj = &MCObj[i];
 			addCurrentDataSourceVariable(server,  &nodeIdMC[i], &context[i][j]);
+			printf("Added datasource variable %s for motor controller %d\n", context[i][j].MCObj->MCLib[j].nameDisplay, i+1);
 		}
 	}
 	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Object types defined and all object instances created\n");

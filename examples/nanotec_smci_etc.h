@@ -235,7 +235,7 @@ get_status_description(UA_Int32 *status, UA_String* status_description){
 /* Look-up-table for the description of position modes */
 static UA_INLINE UA_StatusCode
 get_posMode_description(UA_Int32 *posModeIdx, UA_String* posMode_description){
-	char* posMode = (char*) malloc(1); memset(posMode, '\0', 1);
+	char* posMode = (char*) malloc(50); memset(posMode, '\0', 1);
 	switch(*posModeIdx) {
 		case 1: strcpy(posMode, "relative pos. mode"); break;
 		case 2: strcpy(posMode, "absolut pos. mode"); break;
