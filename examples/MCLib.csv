@@ -1,0 +1,7 @@
+(char*)name, (char*)nameDisplay, (char)type, (bool)write, (char*)cmd_write, (char*)cmd_read, (int)min, (int)max
+traversepath,traverse-path,0,1,s,Zs,-100000000,+100000000
+repeats,repeats-of-current-set,0,1,W,ZW,0,254
+firmwareversion,firmware-version,1,0,NULL,$,0,
+positionmode,position-mode,0,1,p,Zp,1,19
+positionmodedescription,position-mode-description,3,0,NULL,Zp,1,19
+status,status-description,2,0,NULL,$,0,0

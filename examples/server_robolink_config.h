@@ -24,7 +24,8 @@
 #define SIZE_TTYNAME 50
 #define N_MOTORCONTROLLERS 3 		/* max. number of motor controllers */
 #define N_PORTS 1					/* number of ports, either 1 or N_MOTORCONTROLLERS (1 if all motor controllers are connected to the same port or N if each controller is connected to a single port) */
-#define N_MCCOMMANDS 5				/* WIP: number of currently defined motor controller commands */
+#define N_MCCOMMANDS 6				/* WIP: number of currently defined motor controller commands, corresponds number if lines in csv file with command list*/
+#define MCLIB_FILENAME "MCLib.csv"
 
 /* options which can be commented out */
 #define DEFAULT_TTYNAME

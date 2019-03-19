@@ -22,10 +22,10 @@
 typedef struct {
 	char* name;								/* name of command for Id creation */
 	char* nameDisplay;						/* display name of command for user */
+	char type;								/* 0 = numeric; 1 = string; 2 = statusbitmask; 3 = position mode number */
 	bool write;								/* value writable? */
 	char* cmd_write;						/* write command according to motor controller programming manual */
 	char* cmd_read;							/* read command according to motor controller programming manual */
-	char type;								/* 0 = numeric; 1 = string; 2 = statusbitmask; 3 = position mode number */
 	int min;								/* minimal allowed value */
 	int max;								/* maximal allowed value */
 } MCCommand;								/* struct variable to parametrize one motor controller command */
@@ -427,19 +427,19 @@ writeCurrentDataSource(UA_Server *server,
 	char msg[30];
 
 	if(MCLib[idx].write){
-		int* value = (int*)dataValue->value.data;
 		if(context->MCObj->fd > 0){
-			MCmessage(context->MCObj->motorAddr, MCLib[idx].cmd_write, value, msg);		/* concatenate message */
+			int* value_int = (int*)dataValue->value.data;
+			MCmessage(context->MCObj->motorAddr, MCLib[idx].cmd_write, value_int, msg);	/* concatenate message */
 			tcflush(context->MCObj->fd, TCIFLUSH); 										/* flush input buffer */
 			sport_send_msg(msg, context->MCObj->fd);									/* send message */
-	#ifdef READ_RESPONSE
+		#ifdef READ_RESPONSE
 			sport_read_msg(msg, context->MCObj->fd);									/* read response */
-	#endif
-			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "writeCurrentDataSource was called");
+		#endif
 		}
 		else
 			UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "Bad filedescriptor! Can't send message.");
 	}
+	UA_LOG_INFO(UA_Log_Stdout, UA_LOGCATEGORY_USERLAND, "writeCurrentDataSource was called");
 	return UA_STATUSCODE_GOOD;
 }
 

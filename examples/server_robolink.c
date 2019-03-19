@@ -55,6 +55,12 @@
 #include "sport.h" 					/* serial port communication */
 #include "nanotec_smci_etc.h"		/* command list for step motor controllers from nanotec */
 
+/**************************/
+/* TODO: WORK IN PROGRESS */		/* CTRL+F: "TODO" or "WIP" */
+/**************************/
+
+//#define WIP 
+
 /*********************************/
 /* FUNCTIONS AND TYPEDEFINITIONS */
 /*********************************/
@@ -69,6 +75,7 @@ static void stopHandler(int sign) {
 /*************/
 /* MAIN LOOP */
 /*************/
+
 int main(int argc, char** argv){
 
     signal(SIGINT, stopHandler);
@@ -95,10 +102,21 @@ int main(int argc, char** argv){
 	MCCommand MCLib[N_MCCOMMANDS];								/* struct array as list of motor controller commands */
 	MCDataSourceContext context[N_MOTORCONTROLLERS][N_MCCOMMANDS]; /* struct matrix with one element for each motor controller and each command */
 
+#ifdef WIP
+	char cwd[1000]; 											/* current working directory */
+	char MCLib_fp[strlen(cwd)+strlen(MCLIB_FILENAME)+1]; 		/* filepath to MCLib.csv which inhibits the motor controller command list */
+	char* tmp_ptr = NULL;
+	int bufsize = 600;											/* buffersize to read motor controller commands from csv */
+	char linebuf[bufsize];										/* buffer to read motor controller commands from csv */
+	char* field = "";
+	char delims[] = ",";
+//	char *result = NULL;
+	FILE *MCLibFile;											/* file descriptor for csv file with motor controller commands */
+#endif
+
 	/* Example Assignment of motor controller command*/
-	/* TODO: Write commands into a csv file and read it from here */
-	//enum {minussign, dollarsign, percentsign, _aaa, _accel, _aoa, _b, _B, _baud, _brake_ta, _brake_tb, _brake_tc, _ca, _Capt_iAnalog}; /* not completed yet */
-	enum {s, p, W, v, dollarsign};
+	/* TODO: Write commands into a csv file and read it from there, CTRL+F "WIP" */
+	enum {s, W, v, p, p1, dollarsign};
 	MCLib[s].name = "traversepath";
 	MCLib[s].nameDisplay = "traverse-path";
 	MCLib[s].write = 1;
@@ -128,9 +146,17 @@ int main(int argc, char** argv){
 	MCLib[p].write = 1;
 	MCLib[p].cmd_write = "p";
 	MCLib[p].cmd_read = "Zp";
-	MCLib[p].type = 3;
+	MCLib[p].type = 0;
 	MCLib[p].min = 1;
 	MCLib[p].max = 19;
+	MCLib[p1].name = "positionmodedescription";
+	MCLib[p1].nameDisplay = "position-mode-description";
+	MCLib[p1].write = 1;
+	MCLib[p1].cmd_write = "";
+	MCLib[p1].cmd_read = "Zp";
+	MCLib[p1].type = 3;
+	MCLib[p1].min = 1;
+	MCLib[p1].max = 19;
 	MCLib[dollarsign].name = "status";
 	MCLib[dollarsign].nameDisplay = "status-description";
 	MCLib[dollarsign].write = 0;
@@ -139,6 +165,67 @@ int main(int argc, char** argv){
 	MCLib[dollarsign].type = 2;
 	MCLib[dollarsign].min = 0;
 	MCLib[dollarsign].max = 0;
+
+#ifdef WIP
+	/* Get Filepath to command list table in MCLib.csv */
+	getcwd(cwd, sizeof(cwd));
+	printf("cwd = %s\n", cwd);
+#if defined(_WIN32) || defined(_WIN64)
+	printf("Pls use linux the next time, windows is also supported but I hardly recommend using linux. \nIf there's a file opening error you can configure do the following: \n1) open server_robolink_config.h \n2) comment out #define FILEPATH_DYNAMIC \n3) uncomment #define FILEPATH_ABSOLUT <your filepath> \n4) fill in your actual filepath to MCLib.csv \n Nonetheless: Good luck!\n");
+	strcpy(MCLib_fp, cwd);
+	tmp_ptr = strstr(MCLib_fp, "build");
+	tmp_ptr[0] = '\0';
+	strcat(MCLib_fp, "examples\\");
+	strcat(MCLib_fp, MCLIB_FILENAME);
+#else
+#ifdef __linux
+	printf("Yey, a linux user :3\n Have fun.\n");
+	strcpy(MCLib_fp, cwd);
+	tmp_ptr = strstr(MCLib_fp, "build");
+	tmp_ptr[0] = '\0';
+	strcat(MCLib_fp, "examples/");
+	strcat(MCLib_fp, MCLIB_FILENAME);
+#else
+	printf("Mh, dunno which OS you're using, probably that'll lead to an error when opening the MCLib.csv file. \nI hardly recommend using linux. You can configure do the following: \n1) open server_robolink_config.h \n2) comment out #define FILEPATH_DYNAMIC \n3) uncomment #define FILEPATH_ABSOLUT <your filepath> \n4) fill in your actual filepath to MCLib.csv \n Nonetheless: Good luck!\n");
+	strcpy(MCLib_fp, cwd);
+	tmp_ptr = strstr(MCLib_fp, "build");
+	tmp_ptr[0] = '\0';
+	strcat(MCLib_fp, "examples/");
+	strcat(MCLib_fp, MCLIB_FILENAME);
+#endif
+#endif
+
+	/* Open MCLib.csv for reading */
+	MCLibFile = fopen(MCLib_fp, "r");							/* open file to read */
+	if (MCLibFile == NULL){
+		fprintf(stderr, "\nError opening file MCLib.csv\n");
+		exit(1);
+	}l
+
+	/* TODO: Read correctly every field and assign MCLib[]-Arrayelements */
+	/* Read MCLib.csv file content till end of file */
+	fgets(linebuf, bufsize, MCLibFile);							/* skip header line */
+	for (j=0; j<N_MCCOMMANDS; j++){
+		printf("Functioning example assignment of MCLib[]:\nidx = %d, name = %s, displayname = %s, type = %d, write = %d\ncmd-write = %s, cmd-read = %s, min = %d, max = %d\n\n", j, MCLib[j].name, MCLib[j].nameDisplay, (int)(MCLib[j].type), MCLib[j].write, MCLib[j].cmd_write, MCLib[j].cmd_read, MCLib[j].min, MCLib[j].max);
+
+		fgets(linebuf, bufsize, MCLibFile);						/* read a line */
+		MCLib[j].name = strtok(linebuf, delims);
+		MCLib[j].nameDisplay = strtok(NULL, delims);
+		field = strtok(NULL, delims);
+		MCLib[j].type = (char)atoi(field);
+		field = strtok(NULL, delims);
+		MCLib[j].write = atoi(field);
+		MCLib[j].cmd_write = strtok(NULL, delims);
+		MCLib[j].cmd_read = strtok(NULL, delims);
+		field = strtok(NULL, delims);
+		MCLib[j].min = atoi(field);
+		field = strtok(NULL, delims);
+		MCLib[j].max = atoi(field);
+		
+		printf("WIP example assignment of MCLib[] from csv file:\nidx = %d, name = %s, displayname = %s, type = %d, write = %d\ncmd-write = %s, cmd-read = %s, min = %d, max = %d\n\n", j, MCLib[j].name, MCLib[j].nameDisplay, (int)(MCLib[j].type), MCLib[j].write, MCLib[j].cmd_write, MCLib[j].cmd_read, MCLib[j].min, MCLib[j].max);
+	}
+	fclose(MCLibFile);
+#endif /* #ifdef WIP */
 
 	/* ASSIGNMENTS */
 	/* Assign pointer to first array element of struct array with motor controller commands to context of motor controller object instances */
