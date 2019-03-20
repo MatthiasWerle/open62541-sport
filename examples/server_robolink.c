@@ -1,6 +1,13 @@
-/* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
+/* Author Matthias Markus Werle 2019
+ * 
+ * This work is licensed under a Creative Commons CCZero 1.0 Universal License.
  * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. 
- * Peace, Love and Libertarian Anarchy, dear comrades! (A) */
+ * 
+ * Peace, Love and Unicorns! You're free to use the work but pleased to use it for a contribution
+ * to a better world without discrimination against anyone, where the only domination is 
+ * consentual for personal pleasures and where no form of unnecessary violence is tolerated. 
+ * 
+ * Kaffee oder lieber Tee? -> Liberté! */
 
 /**
  * OPC UA server implementation for control of multiple Nanotec motor controllers
@@ -59,7 +66,7 @@
 /* TODO: WORK IN PROGRESS */		/* CTRL+F: "TODO" or "WIP" */
 /**************************/
 
-#define WIP 
+//#define WIP 						/* read from csv file and reformat the data is still buggy */
 
 /*********************************/
 /* FUNCTIONS AND TYPEDEFINITIONS */
@@ -255,8 +262,8 @@ int main(int argc, char** argv){
 		#endif
 		#ifndef DEFAULT_TTYNAME
 				printf("Enter device file name (e.g. \"/dev/ttyUSB0\" for MotorController%d: ", i+1);
-				fgets(ttyname[i] SIZE_TTYNAME, stdin);
-				ttyname[i][strcspn(ttyname[i], "\n")] = 0; 	/* delete the "\n" from fgets command at the end of the string */
+				fgets(ttyname[i], SIZE_TTYNAME, stdin);
+				ttyname[i][strcspn(ttyname[i], "\n")] = 0; 		/* delete the "\n" from fgets command at the end of the string */
 		#endif
 	}
 

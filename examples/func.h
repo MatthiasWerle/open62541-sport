@@ -1,6 +1,13 @@
-/* This work is licensed under a Creative Commons CCZero 1.0 Universal License.
+/* Author Matthias Markus Werle 2019
+ * 
+ * This work is licensed under a Creative Commons CCZero 1.0 Universal License.
  * See http://creativecommons.org/publicdomain/zero/1.0/ for more information. 
- * Peace, Love and Libertarian Anarchy, dear comrades! (A) */
+ * 
+ * Peace, Love and Unicorns! You're free to use the work but pleased to use it for a contribution
+ * to a better world without discrimination against anyone, where the only domination is 
+ * consentual for personal pleasures and where no form of unnecessary violence is tolerated. 
+ * 
+ * Kaffee oder lieber Tee? -> Liberté! */
  
 /************************/
 /* edit node attributes */
